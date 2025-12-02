@@ -1,0 +1,11 @@
+id,question,A,B,C,D,category
+Q001,"Năm 1945, sự kiện lịch sử quan trọng nào đã diễn ra ở Việt Nam?",Khởi nghĩa Yên Bái,Cách mạng tháng Tám thành công,Hiệp định Genève được ký kết,Chiến thắng Điện Biên Phủ,history
+Q002,Thủ đô của Việt Nam là thành phố nào?,Hồ Chí Minh,Đà Nẵng,Hà Nội,Huế,geography
+Q003,"Một nông trại có cả gà và chó. Tổng số đầu là 36, tổng số chân là 100. Hỏi có bao nhiêu con chó?",12,14,22,16,math_logic
+Q004,Tìm nghiệm dương của phương trình: x^2 - 5x + 6 = 0,2 và 3,1 và 6,-2 và -3,Chỉ có 3,math_equation
+Q005,Giá trị của biểu thức S = 1 + 2 + 3 + ... + 100 là bao nhiêu?,5000,5050,5100,4950,math_sequence
+Q006,Tính kết quả chính xác của phép nhân: 123456 x 789,97406784,97406794,97306784,97506784,math_arithmetic
+Q007,"Nếu gửi tiết kiệm 100 triệu đồng với lãi suất 8%/năm (lãi kép, nhập gốc hàng năm), sau 10 năm sẽ nhận được bao nhiêu tiền (làm tròn đến triệu đồng gần nhất)?",216 triệu,180 triệu,200 triệu,250 triệu,math_finance
+Q008,"Tìm số tiếp theo trong dãy số: 2, 6, 12, 20, 30, ...?",38,40,42,44,logic_sequence
+Q009,"Trong một phòng họp có 10 người. Nếu mỗi người đều bắt tay với tất cả những người khác đúng một lần, thì có tổng cộng bao nhiêu cái bắt tay?",90,100,45,50,math_combinatorics
+Q010,"Nếu hôm nay là Thứ Hai, thì 1000 ngày sau (tính từ ngày mai) là thứ mấy trong tuần?",Thứ Tư,Thứ Năm,Chủ Nhật,Thứ Ba,logic_datetime
