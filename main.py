@@ -8,7 +8,6 @@ from pydantic import BaseModel, Field
 
 from src.config import DATA_INPUT_DIR, DATA_OUTPUT_DIR
 from src.graph import GraphState, get_graph
-from src.nodes.rag import set_vector_store
 from src.utils.ingestion import ingest_knowledge_base
 
 
@@ -48,20 +47,19 @@ def run_pipeline(questions: list[QuestionInput], force_reingest: bool = False) -
         questions: List of questions to process.
         force_reingest: If True, force re-ingestion of knowledge base. Defaults to False.
     """
-    print("Initializing knowledge base...")
-    vector_store = ingest_knowledge_base(force=force_reingest)
-    set_vector_store(vector_store)
+    print("[Pipeline] Initializing knowledge base...")
+    ingest_knowledge_base(force=force_reingest)
 
     graph = get_graph()
     predictions = []
 
     for i, q in enumerate(questions, 1):
-        print(f"\nProcessing question {i}/{len(questions)}: {q.id}")
+        print(f"\n[Pipeline] Processing question {i}/{len(questions)}: {q.id}")
         print(f"  Question: {q.question}")
-        print(f"  Option A: {q.A}")
-        print(f"  Option B: {q.B}")
-        print(f"  Option C: {q.C}")
-        print(f"  Option D: {q.D}")
+        print(f"  A. {q.A}")
+        print(f"  B. {q.B}")
+        print(f"  C. {q.C}")
+        print(f"  D. {q.D}")
 
         state: GraphState = {
             "question_id": q.id,
@@ -94,7 +92,7 @@ def save_predictions(predictions: list[PredictionOutput], output_path: Path) -> 
         writer.writeheader()
         for pred in predictions:
             writer.writerow({"id": pred.id, "answer": pred.answer})
-    print(f"\nPredictions saved to: {output_path}")
+    print(f"\n[Pipeline] Predictions saved to: {output_path}")
 
 
 def main() -> None:
@@ -104,17 +102,13 @@ def main() -> None:
         input_file = DATA_INPUT_DIR / "public_test.csv"
 
     if not input_file.exists():
-        print("Test file not found. Generating dummy data...")
-        from data.generate_dummy_data import (
-            generate_knowledge_base,
-            generate_public_test_csv,
-        )
-        generate_public_test_csv()
+        print("[Main] Test file not found. Generating dummy data...")
+        from data.generate_dummy_data import generate_knowledge_base
         generate_knowledge_base()
 
-    print(f"Loading test data from: {input_file}")
+    print(f"[Main] Loading test data from: {input_file}")
     questions = load_test_data(input_file)
-    print(f"Loaded {len(questions)} questions")
+    print(f"[Main] Loaded {len(questions)} questions")
 
     predictions = run_pipeline(questions)
 

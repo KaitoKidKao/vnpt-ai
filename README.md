@@ -1,17 +1,19 @@
 # VNPT AI RAG Pipeline
 
-**High-performance Agentic RAG Pipeline** designed for the VNPT AI Hackathon (Track 2).
+High-performance Agentic RAG Pipeline designed for the VNPT AI Hackathon (Track 2).
 
-This project implements a modular, model-agnostic workflow using **LangGraph** to intelligently route questions, execute Python code for math reasoning, and retrieve knowledge from a persistent vector store, optimizing for both accuracy and API quota efficiency.
+This project implements a modular, model-agnostic workflow using **LangGraph** to intelligently route questions, execute Python code for complex reasoning, and retrieve knowledge from a persistent vector store. It is engineered for high accuracy, fault tolerance, and API quota efficiency.
 
 ## 🚀 Key Features
 
-- **Agentic Workflow**: Uses a **Router Node** to classify questions (Math, Knowledge, or Toxic) and direct them to specialized solvers.
-- **Quota Optimization**: 
-  - **Tiered Modeling**: Uses "Small" models for routing (high volume) and "Large" models for reasoning/RAG (complex tasks).
-  - **Persistent Embedding**: Implements local disk caching for Qdrant to prevent re-embedding and save quota.
-- **Program-Aided Language Models (PAL)**: Solves math and logic problems by generating and executing Python code via a local REPL, eliminating LLM calculation errors.
-- **Responsible AI**: Built-in safety guards to detect and refuse toxic or sensitive content.
+- **Agentic Workflow**: Utilizes a **Router Node** to classify questions into distinct domains (Math, Knowledge, or Toxic) and routes them to specialized solvers.
+- **Program-Aided Language Models (PAL)**:
+  - Solves math and logic problems by generating and executing Python code via a local REPL.
+  - **Self-Correction Loop**: The logic solver iteratively executes code, captures output, and feeds it back to the LLM to correct errors or format the final answer (up to 5 retry steps).
+- **Quota Optimization**:
+  - **Tiered Modeling Architecture**: Supports using lightweight "Small" models for routing and "Large" models for deep reasoning/RAG.
+  - **Smart Caching**: Implements local disk caching for **Qdrant** to prevent redundant re-embedding of the knowledge base.
+- **Responsible AI**: Robust safety guardrails to detect and refuse toxic, dangerous, or politically sensitive content based on Vietnamese context.
 
 ## 🏗️ Architecture
 
@@ -31,98 +33,107 @@ graph TD
     end
     
     subgraph "Logic Processing"
-        LogicSolver <--> PythonREPL[Python Interpreter<br/>Manual Code Execution]
+        LogicSolver <--> PythonREPL[Python Interpreter<br/>Iterative Execution]
     end
     
     LogicSolver --> End([Final Answer])
     KnowledgeRAG --> End
     SafetyGuard --> End
-```
+````
 
 ### Components
 
-1. **Router Node**: Uses a lightweight small model to classify inputs into math, knowledge, or toxic categories.
-2. **Logic Solver**: A Code Agent that writes Python code (extracted via regex) and executes it locally to solve math problems. Uses manual code execution patter.
-3. **Knowledge RAG**: A Retrieval-Augmented Generation node using Qdrant vector store with persistent disk caching.
-4. **Safety Guard**: A deterministic filter for harmful content.
+1.  **Router Node**: A classifier using a small LLM to categorize inputs.
+2.  **Logic Solver**: A Code Agent that extracts Python code from LLM responses, executes it locally, and parses the standard output to find the final answer. It includes error handling and retry logic.
+3.  **Knowledge RAG**: Retrieves relevant context from the Qdrant vector store and generates answers using the large LLM.
+4.  **Safety Guard**: A deterministic sink node that provides standard refusal responses for content classified as "Toxic".
 
 ## 🛠️ Tech Stack
 
-| Component | Current Implementation |
+| Component | Implementation |
 | :--- | :--- |
 | **Orchestration** | LangGraph, LangChain |
-| **Router LLM** | HuggingFace Qwen (Small Model)  |
-| **Reasoning/RAG LLM** | HuggingFace Qwen (Large Model)  |
+| **Package Manager** | uv |
 | **Vector DB** | Qdrant (Local Persistence) |
 | **Embedding** | BKAI Vietnamese Bi-encoder |
-| **Code Execution** | PythonREPL (Local) |
-
+| **Code Execution** | LangChain Experimental PythonREPL |
+| **Models** | Configurable via `.env` (Default: Qwen-4B) |
 
 ## ⚡ Quick Start
 
 ### Prerequisites
 
-- Python ≥3.10
-- [uv](https://github.com/astral-sh/uv) (recommended for fast setup)
-- CUDA-capable GPU (recommended for model inference)
+  - Python ≥3.10
+  - [uv](https://github.com/astral-sh/uv) (Recommended for fast dependency management)
+  - CUDA-capable GPU (Recommended for local inference)
 
 ### Installation
 
-```bash
-# 1. Clone the repository
-git clone https://github.com/duongtruongbinh/vnpt-ai
-cd vnpt-ai
+1.  **Clone the repository**
 
-# 2. Install dependencies
-uv sync
+    ```bash
+    git clone [https://github.com/duongtruongbinh/vnpt-ai](https://github.com/duongtruongbinh/vnpt-ai)
+    cd vnpt-ai
+    ```
 
-# 3. Configure Environment (Optional)
-# Create .env file to override default model paths
-# LLM_MODEL_SMALL=/path/to/small/model
-# LLM_MODEL_LARGE=/path/to/large/model
-```
+2.  **Install dependencies**
+
+    ```bash
+    uv sync
+    ```
+
+3.  **Configure Environment (Optional)**
+    Create a `.env` file to point to your specific local model paths.
+
+    ```env
+    # Example .env
+    LLM_MODEL_SMALL=/path/to/your/small/model
+    LLM_MODEL_LARGE=/path/to/your/large/model
+    EMBEDDING_MODEL=bkai-foundation-models/vietnamese-bi-encoder
+    ```
 
 ### Usage
 
 **1. Generate Dummy Data (Optional)**
-Creates sample questions and a knowledge base for testing.
+If you don't have the official dataset yet, generate sample questions and a knowledge base:
 
 ```bash
 uv run python data/generate_dummy_data.py
 ```
 
 **2. Run the Pipeline**
-The system automatically handles vector ingestion with smart caching.
+The system automatically handles vector ingestion.
 
-- *First run:* Embeds data and saves to `data/qdrant_storage` (Consumes Embedding API quota).
-- *Subsequent runs:* Loads from disk (Zero quota usage).
+  * **First run:** Embeds `knowledge_base.txt` and saves to `data/qdrant_storage`.
+  * **Subsequent runs:** Loads directly from disk (Instant startup).
 
 ```bash
 uv run python main.py
 ```
 
-- **Input:** `data/public_test.csv` (or `data/private_test.csv`)
-- **Output:** `data/pred.csv` (or `/output/pred.csv`)
+  * **Input Priority:** Checks for `data/private_test.csv` first, then falls back to `data/public_test.csv`.
+  * **Output:** Results are saved to `data/pred.csv`.
 
 ## 📂 Project Structure
 
 ```
 vnpt-ai/
 ├── data/                 
-│   ├── qdrant_storage/   # Persistent Vector DB (Do not commit)
+│   ├── qdrant_storage/   # Persistent Vector DB (Git ignored)
 │   ├── knowledge_base.txt
 │   ├── public_test.csv
 │   └── generate_dummy_data.py
 ├── src/
 │   ├── graph.py          # LangGraph workflow definition
-│   ├── config.py         # Settings & Model configuration
+│   ├── config.py         # Configuration & Environment loading
 │   ├── nodes/
-│   │   ├── router.py     # Classification (Small Model)
-│   │   ├── rag.py        # RAG Logic (Large Model)
-│   │   └── logic.py      # Code Interpreter (Large Model)
+│   │   ├── __init__.py
+│   │   ├── router.py     # Classification Logic
+│   │   ├── rag.py        # Retrieval & Safety Logic
+│   │   └── logic.py      # Python Code Agent Logic
 │   └── utils/
-│       ├── llm.py        # Model loading utilities
-│       └── ingestion.py  # Smart ingestion with caching
-├── main.py               # Entry point
-└── pyproject.toml        # Dependencies
+│       ├── llm.py        # HuggingFace Model Loading
+│       └── ingestion.py  # Qdrant Ingestion & Caching
+├── main.py               # Application Entry Point
+└── pyproject.toml        # Dependencies & Project Metadata
 ```

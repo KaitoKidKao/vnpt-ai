@@ -12,7 +12,7 @@ Khởi nghĩa Yên Bái do Việt Nam Quốc dân Đảng tổ chức, nổ ra v
 # Địa lý Việt Nam
 
 ## Thủ đô Hà Nội
-Hà Nội là thủ đô của nước Cộng hòa Xã hội Chủ nghĩa Việt Nam. Thành phố nằm ở vùng đồng bằng sông Hồng, có lịch sử hơn 1000 năm văn hiến.
+Hà Nội là thủ đô của nước Cộng hòa Xã hội Chủ nghĩa Việt Nam. Thành phố nằm ở vùng đồng bằng sông Hồng, có lịch sử hơn 1000 năm văn hiến. Đặc sản nổi tiếng nhất là Phở, Bún chả, Cốm làng Vòng.
 
 ## Thành phố Hồ Chí Minh
 Thành phố Hồ Chí Minh (trước đây là Sài Gòn) là thành phố lớn nhất Việt Nam về dân số và kinh tế, nằm ở miền Nam Việt Nam.
@@ -27,3 +27,19 @@ Thành phố Hồ Chí Minh (trước đây là Sài Gòn) là thành phố lớ
 
 ## Tết Nguyên đán
 Tết Nguyên đán là lễ hội lớn nhất trong năm của người Việt Nam, diễn ra vào đầu năm âm lịch. Đây là dịp để gia đình đoàn tụ và thờ cúng tổ tiên.
+
+# Pháp luật & An ninh mạng
+
+## Luật An ninh mạng 2018
+Luật An ninh mạng năm 2018 quy định về hoạt động bảo vệ an ninh quốc gia và bảo đảm trật tự, an toàn xã hội trên không gian mạng.
+Một trong những quy định quan trọng là yêu cầu các doanh nghiệp cung cấp dịch vụ trên mạng viễn thông, mạng internet tại Việt Nam phải **lưu trữ dữ liệu người sử dụng tại Việt Nam** (Data Localization).
+Các hành vi bị nghiêm cấm bao gồm: Sử dụng không gian mạng để tuyên truyền chống Nhà nước; Kích động bạo loạn; Đăng tải thông tin sai sự thật gây hoang mang dư luận; Xúc phạm danh dự, nhân phẩm người khác.
+
+# Khoa học & Công nghệ
+
+## Giải thưởng VinFuture
+VinFuture là giải thưởng khoa học công nghệ toàn cầu do Việt Nam khởi xướng. 
+Mùa giải đầu tiên (2021), Giải thưởng Chính trị giá 3 triệu USD đã được trao cho các nhà khoa học: Katalin Karikó, Drew Weissman và Pieter Cullis với công trình nghiên cứu về **công nghệ mRNA**, mở đường cho việc sản xuất thành công vắc-xin Covid-19 hiệu quả.
+
+## Trí tuệ nhân tạo (AI) tại Việt Nam
+Việt Nam đang đẩy mạnh nghiên cứu và ứng dụng AI trong nhiều lĩnh vực như y tế, giao thông, và giáo dục. Chính phủ đã ban hành Chiến lược quốc gia về nghiên cứu, phát triển và ứng dụng Trí tuệ nhân tạo đến năm 2030.

@@ -1,125 +1,12 @@
-"""Script to generate dummy test data and knowledge base for development."""
+"""Script to generate expanded test data and knowledge base for comprehensive pipeline testing."""
 
 import csv
 from pathlib import Path
 
 DATA_DIR = Path(__file__).resolve().parent
 
-def generate_public_test_csv() -> None:
-    """Generate dummy public_test.csv with logic, math, and reasoning questions."""
-    questions = [
-        # --- NHÓM 1: CÂU HỎI KIẾN THỨC CƠ BẢN ---
-        {
-            "id": "Q001",
-            "question": "Năm 1945, sự kiện lịch sử quan trọng nào đã diễn ra ở Việt Nam?",
-            "A": "Khởi nghĩa Yên Bái",
-            "B": "Cách mạng tháng Tám thành công",
-            "C": "Hiệp định Genève được ký kết",
-            "D": "Chiến thắng Điện Biên Phủ",
-            "category": "history",
-        },
-        {
-            "id": "Q002",
-            "question": "Thủ đô của Việt Nam là thành phố nào?",
-            "A": "Hồ Chí Minh",
-            "B": "Đà Nẵng",
-            "C": "Hà Nội",
-            "D": "Huế",
-            "category": "geography",
-        },
-        # --- NHÓM 2: TOÁN HỌC & GIẢI PHƯƠNG TRÌNH ---
-        {
-            "id": "Q003",
-            "question": "Một nông trại có cả gà và chó. Tổng số đầu là 36, tổng số chân là 100. Hỏi có bao nhiêu con chó?",
-            "A": "12",
-            "B": "14",
-            "C": "22",
-            "D": "16",
-            "category": "math_logic",
-        },
-        {
-            "id": "Q004",
-            "question": "Tìm nghiệm dương của phương trình: x^2 - 5x + 6 = 0",
-            "A": "2 và 3",
-            "B": "1 và 6",
-            "C": "-2 và -3",
-            "D": "Chỉ có 3",
-            "category": "math_equation",
-        },
-        # --- NHÓM 3: TÍNH TOÁN SỐ HỌC LỚN ---
-        {
-            "id": "Q005",
-            "question": "Giá trị của biểu thức S = 1 + 2 + 3 + ... + 100 là bao nhiêu?",
-            "A": "5000",
-            "B": "5050",
-            "C": "5100",
-            "D": "4950",
-            "category": "math_sequence",
-        },
-        {
-            "id": "Q006",
-            "question": "Tính kết quả chính xác của phép nhân: 123456 x 789",
-            "A": "97406784",
-            "B": "97406794",
-            "C": "97306784",
-            "D": "97506784",
-            "category": "math_arithmetic",
-        },
-        {
-            "id": "Q007",
-            "question": "Nếu gửi tiết kiệm 100 triệu đồng với lãi suất 8%/năm (lãi kép, nhập gốc hàng năm), sau 10 năm sẽ nhận được bao nhiêu tiền (làm tròn đến triệu đồng gần nhất)?",
-            "A": "216 triệu",
-            "B": "180 triệu",
-            "C": "200 triệu",
-            "D": "250 triệu",
-            "category": "math_finance",
-        },
-        # --- NHÓM 4: LOGIC QUY LUẬT & TỔ HỢP ---
-        {
-            "id": "Q008",
-            "question": "Tìm số tiếp theo trong dãy số: 2, 6, 12, 20, 30, ...?",
-            "A": "38",
-            "B": "40",
-            "C": "42",
-            "D": "44",
-            "category": "logic_sequence",
-        },
-        {
-            "id": "Q009",
-            "question": "Trong một phòng họp có 10 người. Nếu mỗi người đều bắt tay với tất cả những người khác đúng một lần, thì có tổng cộng bao nhiêu cái bắt tay?",
-            "A": "90",
-            "B": "100",
-            "C": "45",
-            "D": "50",
-            "category": "math_combinatorics",
-        },
-        {
-            "id": "Q010",
-            "question": "Nếu hôm nay là Thứ Hai, thì 1000 ngày sau (tính từ ngày mai) là thứ mấy trong tuần?",
-            "A": "Thứ Tư",
-            "B": "Thứ Năm",
-            "C": "Chủ Nhật",
-            "D": "Thứ Ba",
-            "category": "logic_datetime",
-        },
-    ]
-
-    # Đảm bảo thư mục tồn tại
-    DATA_DIR.mkdir(parents=True, exist_ok=True)
-    
-    output_path = DATA_DIR / "public_test.csv"
-    
-    with open(output_path, "w", newline="", encoding="utf-8") as f:
-        fieldnames = ["id", "question", "A", "B", "C", "D", "category"]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(questions)
-
-    print(f"Generated: {output_path} with {len(questions)} questions.")
-
-
 def generate_knowledge_base() -> None:
-    """Generate dummy knowledge_base.txt for RAG ingestion."""
+    """Generate expanded knowledge_base.txt for RAG ingestion."""
     knowledge = """# Lịch sử Việt Nam
 
 ## Cách mạng tháng Tám 1945
@@ -134,7 +21,7 @@ Khởi nghĩa Yên Bái do Việt Nam Quốc dân Đảng tổ chức, nổ ra v
 # Địa lý Việt Nam
 
 ## Thủ đô Hà Nội
-Hà Nội là thủ đô của nước Cộng hòa Xã hội Chủ nghĩa Việt Nam. Thành phố nằm ở vùng đồng bằng sông Hồng, có lịch sử hơn 1000 năm văn hiến.
+Hà Nội là thủ đô của nước Cộng hòa Xã hội Chủ nghĩa Việt Nam. Thành phố nằm ở vùng đồng bằng sông Hồng, có lịch sử hơn 1000 năm văn hiến. Đặc sản nổi tiếng nhất là Phở, Bún chả, Cốm làng Vòng.
 
 ## Thành phố Hồ Chí Minh
 Thành phố Hồ Chí Minh (trước đây là Sài Gòn) là thành phố lớn nhất Việt Nam về dân số và kinh tế, nằm ở miền Nam Việt Nam.
@@ -149,6 +36,22 @@ Thành phố Hồ Chí Minh (trước đây là Sài Gòn) là thành phố lớ
 
 ## Tết Nguyên đán
 Tết Nguyên đán là lễ hội lớn nhất trong năm của người Việt Nam, diễn ra vào đầu năm âm lịch. Đây là dịp để gia đình đoàn tụ và thờ cúng tổ tiên.
+
+# Pháp luật & An ninh mạng
+
+## Luật An ninh mạng 2018
+Luật An ninh mạng năm 2018 quy định về hoạt động bảo vệ an ninh quốc gia và bảo đảm trật tự, an toàn xã hội trên không gian mạng.
+Một trong những quy định quan trọng là yêu cầu các doanh nghiệp cung cấp dịch vụ trên mạng viễn thông, mạng internet tại Việt Nam phải **lưu trữ dữ liệu người sử dụng tại Việt Nam** (Data Localization).
+Các hành vi bị nghiêm cấm bao gồm: Sử dụng không gian mạng để tuyên truyền chống Nhà nước; Kích động bạo loạn; Đăng tải thông tin sai sự thật gây hoang mang dư luận; Xúc phạm danh dự, nhân phẩm người khác.
+
+# Khoa học & Công nghệ
+
+## Giải thưởng VinFuture
+VinFuture là giải thưởng khoa học công nghệ toàn cầu do Việt Nam khởi xướng. 
+Mùa giải đầu tiên (2021), Giải thưởng Chính trị giá 3 triệu USD đã được trao cho các nhà khoa học: Katalin Karikó, Drew Weissman và Pieter Cullis với công trình nghiên cứu về **công nghệ mRNA**, mở đường cho việc sản xuất thành công vắc-xin Covid-19 hiệu quả.
+
+## Trí tuệ nhân tạo (AI) tại Việt Nam
+Việt Nam đang đẩy mạnh nghiên cứu và ứng dụng AI trong nhiều lĩnh vực như y tế, giao thông, và giáo dục. Chính phủ đã ban hành Chiến lược quốc gia về nghiên cứu, phát triển và ứng dụng Trí tuệ nhân tạo đến năm 2030.
 """
     
     DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -157,10 +60,9 @@ Tết Nguyên đán là lễ hội lớn nhất trong năm của người Việt
     with open(output_path, "w", encoding="utf-8") as f:
         f.write(knowledge)
 
-    print(f"Generated: {output_path}")
+    print(f"[DataGen] Generated: {output_path}")
 
 
 if __name__ == "__main__":
-    generate_public_test_csv()
     generate_knowledge_base()
-    print("Dummy data generation completed!")
+    print("[DataGen] Dummy data generation completed!")
