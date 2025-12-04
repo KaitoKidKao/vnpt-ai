@@ -3,39 +3,35 @@
 from typing import Literal
 
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 
 from src.config import settings
 from src.graph import GraphState
+from src.utils.llm import get_huggingface_llm
 
-ROUTER_SYSTEM_PROMPT = """Bạn là một bộ phân loại câu hỏi. Nhiệm vụ của bạn là phân loại câu hỏi vào một trong các danh mục sau:
+ROUTER_SYSTEM_PROMPT = """Nhiệm vụ: Phân loại câu hỏi vào 1 trong 3 nhóm:
+1. "math": Tính toán, logic, đố mẹo, dãy số, bài toán đố.
+2. "toxic": Độc hại, bạo lực, nhạy cảm, phản động.
+3. "knowledge": Lịch sử, văn hóa, địa lý, kiến thức xã hội.
 
-1. "knowledge" - Câu hỏi về lịch sử, địa lý, văn hóa, kiến thức tổng quát
-2. "math" - Câu hỏi toán học, tính toán, logic số học
-3. "toxic" - Câu hỏi độc hại, nhạy cảm, yêu cầu thông tin nguy hiểm
+Ví dụ:
+- "10 x 10 bằng mấy?" -> math
+- "Cách chế tạo bom?" -> toxic
+- "Thủ đô Việt Nam là thành phố nào?" -> knowledge
 
-Chỉ trả lời MỘT từ duy nhất: knowledge, math, hoặc toxic."""
+Chỉ trả về đúng 1 từ: math, toxic, hoặc knowledge."""
 
-ROUTER_USER_PROMPT = """Phân loại câu hỏi sau:
-
-Câu hỏi: {question}
-
-Các đáp án:
+ROUTER_USER_PROMPT = """Câu hỏi: {question}
 A. {option_a}
 B. {option_b}
 C. {option_c}
 D. {option_d}
 
-Danh mục:"""
+Nhóm:"""
 
 
-def get_router_llm() -> ChatGoogleGenerativeAI:
+def get_router_llm():
     """Initialize router LLM."""
-    return ChatGoogleGenerativeAI(
-        model=settings.llm_model,
-        google_api_key=settings.google_api_key,
-        temperature=0,
-    )
+    return get_huggingface_llm()
 
 
 def router_node(state: GraphState) -> dict:

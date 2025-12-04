@@ -1,38 +1,34 @@
 """RAG and Safety Guard nodes for knowledge-based question answering."""
 
+import re
 from langchain_core.prompts import ChatPromptTemplate
-from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_qdrant import QdrantVectorStore
 
 from src.config import settings
 from src.graph import GraphState
 from src.utils.ingestion import get_embeddings, get_qdrant_client
+from src.utils.llm import get_huggingface_llm
 
-RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI chuyên trả lời câu hỏi trắc nghiệm tiếng Việt.
-Dựa vào ngữ cảnh được cung cấp, hãy chọn đáp án đúng nhất.
+RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI. Dựa vào văn bản cung cấp, hãy suy luận logic để chọn đáp án đúng nhất.
 
-Ngữ cảnh:
+Văn bản:
 {context}
 
-QUAN TRỌNG: Chỉ trả lời MỘT chữ cái duy nhất: A, B, C, hoặc D."""
+Yêu cầu:
+1. Suy luận ngắn gọn (1-2 câu) dựa trên văn bản.
+2. Kết thúc bằng dòng: "Đáp án: X" (X là A, B, C, hoặc D)."""
 
 RAG_USER_PROMPT = """Câu hỏi: {question}
 
 A. {option_a}
 B. {option_b}
 C. {option_c}
-D. {option_d}
-
-Đáp án đúng là:"""
+D. {option_d}"""
 
 
-def get_rag_llm() -> ChatGoogleGenerativeAI:
+def get_rag_llm():
     """Initialize RAG LLM."""
-    return ChatGoogleGenerativeAI(
-        model=settings.llm_model,
-        google_api_key=settings.google_api_key,
-        temperature=0,
-    )
+    return get_huggingface_llm()
 
 _vector_store: QdrantVectorStore | None = None
 
@@ -89,8 +85,9 @@ def knowledge_rag_node(state: GraphState) -> dict:
         "option_c": state["option_c"],
         "option_d": state["option_d"],
     })
-
-    answer = extract_answer(response.content)
+    content = response.content.strip()
+    print(f"    🧠 Reasoning: {content}")
+    answer = extract_answer(content)
     print(f"    ✅ RAG Answer: {answer}")
     return {"answer": answer, "context": context}
 
@@ -100,16 +97,29 @@ def safety_guard_node(state: GraphState) -> dict:
     print("    🛡️  Safety Guard Triggered: Blocked toxic content.")
     return {
         "answer": "D",
-        "context": "Câu hỏi này liên quan đến nội dung không phù hợp. Hệ thống từ chối trả lời.",
+        "context": "Nội dung không phù hợp. Hệ thống từ chối trả lời.",
     }
 
 
 def extract_answer(response: str) -> str:
-    """Extract single letter answer from LLM response."""
-    response = response.strip().upper()
-    if response in ["A", "B", "C", "D"]:
-        return response
-    for char in response:
-        if char in "ABCD":
-            return char
-    return "A"
+    """
+    Robust extraction of answer from CoT response.
+    Looks for pattern 'Đáp án: X' or creates a fallback.
+    """
+    clean_response = response.strip()
+    
+    # Priority 1: Find pattern "Đáp án: X" or "Answer: X" at the end
+    match = re.search(r"(?:Đáp án|Answer|Lựa chọn)[:\s]+([ABCD])", clean_response, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    
+    # Priority 2: If response only has 1 letter A,B,C,D
+    if clean_response.upper() in ["A", "B", "C", "D"]:
+        return clean_response.upper()
+
+    # Priority 3: Scan backwards from the end to find the nearest A,B,C,D
+    for char in reversed(clean_response):
+        if char.upper() in "ABCD":
+            return char.upper()
+            
+    return "A" # Last fallback

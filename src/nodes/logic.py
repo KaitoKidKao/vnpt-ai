@@ -1,129 +1,124 @@
-"""Logic solver node implementing a Code Agent workflow."""
+"""
+Logic solver node implementing a Manual Code Execution workflow.
+Strategy: Regex Parsing + PythonREPL (ReAct Pattern without explicit Tool Binding).
+"""
 
-from typing import Annotated, Literal
-
+import re
 from langchain_core.messages import (
-    AIMessage,
     BaseMessage,
     HumanMessage,
     SystemMessage,
-    ToolMessage,
 )
-from langchain_core.tools import tool
 from langchain_experimental.utilities import PythonREPL
-from langchain_google_genai import ChatGoogleGenerativeAI
-from pydantic import BaseModel, Field
 
 from src.config import settings
 from src.graph import GraphState
-
+from src.utils.llm import get_huggingface_llm
 
 _python_repl = PythonREPL()
 
-@tool
-def python_interpreter(code: Annotated[str, "The python code to execute"]) -> str:
-    """
-    Executes Python code. Use print() to see output.
-    """
-    try:
-        if "print(" not in code:
-            return "Error: You must use print() to output the result."
-        
-        result = _python_repl.run(code)
-        return result.strip() if result else "Executed successfully (no output)."
-    except Exception as e:
-        return f"Execution Error: {str(e)}"
+CODE_AGENT_PROMPT = """Nhiệm vụ của bạn là trả câu hỏi trắc nghiệm bằng cách VIẾT CODE PYTHON để tính toán.
 
-class FinalAnswerInput(BaseModel):
-    answer: Literal["A", "B", "C", "D"] = Field(
-        ..., description="The final selected option (A, B, C, or D)"
-    )
+QUY TRÌNH BẮT BUỘC:
+1. Viết code Python đặt trong block markdown:
+```python
+# code tính toán
+variable = ...
+print(variable)
+```
 
-@tool("final_answer", args_schema=FinalAnswerInput)
-def final_answer(answer: str) -> str:
-    """Submit the final answer and end the task."""
-    return f"Answer submitted: {answer}"
+2.  Code sẽ được chạy và trả về kết quả cho bạn thông qua 'Kết quả chạy code: ...'.
+3.  Dựa vào kết quả, xem xét tiếp tục viết code hoặc trả về đáp án cuối cùng bằng format 'Đáp án: X' (Trong đó X là A, B, C, hoặc D).
+
+LƯU Ý:
+- KHÔNG dùng lời văn mà chỉ dùng code để giải.
+- Code phải có lệnh `print()` để thấy kết quả.
+- Không trả lời trực tiếp đáp án mà chỉ trả lời khi có 'Kết quả chạy code: ...'"""
 
 
-CODE_AGENT_PROMPT = """Bạn là chuyên gia giải toán và logic bằng Python (Python Code Agent).
+def extract_python_code(text: str) -> str | None:
+    """Find and extract Python code from block ```python ...  ```"""
+    match = re.search(r"```python\n(.*?)```", text, re.DOTALL)
+    if match:
+        return match.group(1).strip()
+    return None
 
-QUY TRÌNH:
-1. Đọc câu hỏi và các lựa chọn.
-2. Viết code Python để TÍNH TOÁN đáp án (dùng `print` để in kết quả).
-3. Dựa vào kết quả chạy code, chọn đáp án đúng nhất (A, B, C, hoặc D).
-4. Gọi tool `final_answer` ngay lập tức để trả về kết quả.
+def extract_final_answer(text: str) -> str | None:
+    """Find the answer in the format 'Đáp án: X'"""
+    match = re.search(r"Đáp án: ([A-D])", text, re.IGNORECASE)
+    if match:
+        return match.group(1).upper()
+    return None
 
-QUY TẮC:
-- KHÔNG tính nhẩm. Phải dùng code để tính toán.
-- Code ngắn gọn, trực diện.
-- Trả lời dứt khoát.
-"""
-
-
-def get_agent_llm() -> ChatGoogleGenerativeAI:
-    """Initialize LLM with tools."""
-    llm = ChatGoogleGenerativeAI(
-        model=settings.llm_model,
-        google_api_key=settings.google_api_key,
-        temperature=0, 
-    )
-    return llm.bind_tools([python_interpreter, final_answer])
+def _indent_code(code: str) -> str:
+    """Format code to make it easier to read in the terminal"""
+    return "\n".join(f"        {line}" for line in code.splitlines())
 
 def logic_solver_node(state: GraphState) -> dict:
     """
-    Code Agent Loop: Generate Code -> Execute -> Final Answer.
-    Prints execution steps to console for monitoring.
+    Manual Code Agent Loop:
+    LLM Gen Code -> Regex Extract -> PythonREPL -> LLM Output Final Answer
     """
-    llm = get_agent_llm()
-    
+    llm = get_huggingface_llm() 
     question_content = f"""
-Câu hỏi: {state["question"]}
-A. {state["option_a"]}
-B. {state["option_b"]}
-C. {state["option_c"]}
-D. {state["option_d"]}
-"""
-    
+
+    Câu hỏi: {state["question"]}
+    A. {state["option_a"]}
+    B. {state["option_b"]}
+    C. {state["option_c"]}
+    D. {state["option_d"]}
+    """
+
     messages: list[BaseMessage] = [
         SystemMessage(content=CODE_AGENT_PROMPT),
         HumanMessage(content=question_content)
     ]
-    
-    max_steps = 3 
 
-    for _ in range(max_steps):
-        # Invoke LLM
-        response: AIMessage = llm.invoke(messages)
-        messages.append(response)
+    max_steps = 5 
+
+    for step in range(max_steps):
+        response = llm.invoke(messages)
+        content = response.content
+        messages.append(response) 
+
+        final_ans = extract_final_answer(content)
+        if final_ans:
+            print(f"    ✅ Đã tìm thấy đáp án: {final_ans}")
+            return {"answer": final_ans}
+
+        code_block = extract_python_code(content)
         
-        if not response.tool_calls:
-            # Force tool use if LLM chatters
-            messages.append(HumanMessage(content="Hãy dùng tool python_interpreter hoặc final_answer."))
-            continue
+        if code_block:
+            print(f"    🐍 Step {step+1}: Found code Python. Running...")
+            print(_indent_code(code_block))
+            
+            try:
+                if "print" not in code_block:
+                    lines = code_block.splitlines()
+                    last_line = lines[-1]
+                    if "=" in last_line:
+                        var_name = last_line.split("=")[0].strip()
+                    else:
+                        var_name = last_line.strip()
+                    code_block += f"\nprint({var_name})"
 
-        for tool_call in response.tool_calls:
-            tool_name = tool_call["name"]
-            tool_args = tool_call["args"]
-            tool_id = tool_call["id"]
-
-            if tool_name == "final_answer":
-                ans = tool_args.get("answer", "A")
-                print(f"    ✅ Final Answer: {ans}") 
-                return {"answer": ans}
-
-            elif tool_name == "python_interpreter":
-                code = tool_args.get("code", "")
-                print(f"    🐍 Python Code:\n{_indent_code(code)}")
-                
-                output = python_interpreter.invoke(code)
+                output = _python_repl.run(code_block)
+                output = output.strip() if output else "Code executed successfully but returned no output."
                 print(f"    📄 Output: {output}")
-                
-                # Feedback to LLM
-                messages.append(ToolMessage(content=output, tool_call_id=tool_id))
 
-    print("    ⚠️  Max steps reached. Defaulting to A.")
+                user_feedback = (f"Kết quả chạy code: {output}")
+                messages.append(HumanMessage(content=user_feedback))
+            
+            except Exception as e:
+                error_msg = f"Error running code: {str(e)}"
+                print(f"    ❌ {error_msg}")
+                messages.append(HumanMessage(content=f"{error_msg}. Hãy kiểm tra logic và viết lại code đúng."))
+            
+            continue 
+
+        if step < max_steps - 1:
+            print("    ⚠️ Model has not provided a specific action. Reminding model...")
+            messages.append(HumanMessage(content="Lưu ý: Bạn vẫn chưa đưa ra đáp án cuối cùng. Hãy duyệt kết quả và quyết định tiếp tục viết code python hoặc chốt đáp án bằng 'Đáp án: X'"))
+
+    print("    ⚠️ Max steps reached. Defaulting to A.")
     return {"answer": "A"}
-
-def _indent_code(code: str) -> str:
-    """Helper to indent code for prettier console output."""
-    return "\n".join(f"        {line}" for line in code.splitlines())
