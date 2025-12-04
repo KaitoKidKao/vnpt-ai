@@ -1,7 +1,6 @@
 """Entry point for running the RAG pipeline on test data."""
 
 import csv
-import sys
 from pathlib import Path
 
 from pydantic import BaseModel, Field
@@ -103,7 +102,7 @@ def main() -> None:
 
     if not input_file.exists():
         print("[Main] Test file not found. Generating dummy data...")
-        from data.generate_dummy_data import generate_knowledge_base
+        from scripts.generate_data import generate_knowledge_base
         generate_knowledge_base()
 
     print(f"[Main] Loading test data from: {input_file}")

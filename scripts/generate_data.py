@@ -3,7 +3,7 @@
 import csv
 from pathlib import Path
 
-DATA_DIR = Path(__file__).resolve().parent
+DATA_DIR = Path(__file__).resolve().parent.parent / "data"
 
 def generate_knowledge_base() -> None:
     """Generate expanded knowledge_base.txt for RAG ingestion."""

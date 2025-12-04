@@ -98,10 +98,28 @@ graph TD
 If you don't have the official dataset yet, generate sample questions and a knowledge base:
 
 ```bash
-uv run python data/generate_dummy_data.py
+uv run python scripts/generate_data.py
 ```
 
-**2. Run the Pipeline**
+**2. Collect & Ingest Data (Optional)**
+Expand your knowledge base by crawling websites or adding local documents.
+
+* Crawl Data: Fetch content from websites using the crawler CLI.
+  ```bash
+  # Example: Crawl a website filtering by topic
+  uv run python scripts/crawl.py --url [https://example.com](https://example.com) --mode links --topic "Vietnam History"
+  ```
+
+* Ingest Data: Load crawled JSON files or local documents (PDF, DOCX, TXT) into the Qdrant vector store.
+  ```bash
+  # Ingest crawled data (use --append to keep existing data)
+  uv run python scripts/ingest.py data/crawled/*.json --append
+
+  # Ingest a folder of documents
+  uv run python scripts/ingest.py --dir data/documents --append
+  ```
+
+**3. Run the Pipeline**
 The system automatically handles vector ingestion.
 
   * **First run:** Embeds `knowledge_base.txt` and saves to `data/qdrant_storage`.
@@ -120,9 +138,14 @@ uv run python main.py
 vnpt-ai/
 ├── data/                 
 │   ├── qdrant_storage/   # Persistent Vector DB (Git ignored)
+│   ├── crawled/          # Crawled website data (JSON)
 │   ├── knowledge_base.txt
-│   ├── public_test.csv
-│   └── generate_dummy_data.py
+│   └── public_test.csv
+├── scripts/
+│   ├── __init__.py
+│   ├── crawl.py          # Web crawler CLI script
+│   ├── ingest.py         # Data ingestion CLI script
+│   └── generate_data.py # Generate dummy test data
 ├── src/
 │   ├── graph.py          # LangGraph workflow definition
 │   ├── config.py         # Configuration & Environment loading
@@ -133,7 +156,8 @@ vnpt-ai/
 │   │   └── logic.py      # Python Code Agent Logic
 │   └── utils/
 │       ├── llm.py        # HuggingFace Model Loading
-│       └── ingestion.py  # Qdrant Ingestion & Caching
+│       ├── ingestion.py  # Qdrant Ingestion & Caching
+│       └── web_crawler.py # Web crawler utilities
 ├── main.py               # Application Entry Point
 └── pyproject.toml        # Dependencies & Project Metadata
 ```

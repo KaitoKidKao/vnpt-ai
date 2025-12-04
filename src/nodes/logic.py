@@ -1,13 +1,8 @@
-"""
-Logic solver node implementing a Manual Code Execution workflow.
-"""
+"""Logic solver node implementing a Manual Code Execution workflow."""
 
 import re
-from langchain_core.messages import (
-    BaseMessage,
-    HumanMessage,
-    SystemMessage,
-)
+
+from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_experimental.utilities import PythonREPL
 
 from src.config import settings

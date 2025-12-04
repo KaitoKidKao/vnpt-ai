@@ -1,10 +1,12 @@
 """RAG and Safety Guard nodes for knowledge-based question answering."""
 
 import re
+
 from langchain_core.prompts import ChatPromptTemplate
+
 from src.config import settings
 from src.graph import GraphState
-from src.utils.ingestion import get_vector_store 
+from src.utils.ingestion import get_vector_store
 from src.utils.llm import get_large_model
 
 RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI. Dựa vào văn bản cung cấp, hãy suy luận logic để chọn đáp án đúng nhất.

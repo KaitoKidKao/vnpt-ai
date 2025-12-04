@@ -36,6 +36,7 @@ qdrant_storage/
 # Output files (keep data folder structure)
 data/pred.csv
 data/__pycache__/
+data/crawled/
 *.csv.bak
 
 # Logs
@@ -50,6 +51,7 @@ Thumbs.db
 *.tmp
 *.bak
 *.cache
+repomix-output.xml
 
 # Jupyter
 .ipynb_checkpoints/

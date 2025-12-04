@@ -24,6 +24,8 @@ dependencies = [
     "lxml>=6.0.2",
     "colorama>=0.4.6",
     "accelerate>=1.12.0",
+    "firecrawl-py>=1.0.0",
+    "tqdm>=4.66.0",
 ]
 
 [build-system]

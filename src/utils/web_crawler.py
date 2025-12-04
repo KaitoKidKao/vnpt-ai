@@ -9,9 +9,11 @@ Supports multiple crawl modes:
 
 import json
 import os
+import time
+import unicodedata
 from datetime import datetime
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 from dotenv import load_dotenv
 from firecrawl import FirecrawlApp
@@ -19,7 +21,6 @@ from tqdm import tqdm
 
 load_dotenv()
 
-# Rate limit: ~14 requests/min for free tier = ~4.3s between requests
 DELAY_SECONDS = 6
 
 
@@ -31,11 +32,10 @@ class WebCrawler:
         if not self.api_key:
             raise ValueError("FIRECRAWL_API_KEY required")
         self.app = FirecrawlApp(api_key=self.api_key)
-        self._last_request = 0
+        self._last_request = 0.0
     
     def _wait_rate_limit(self):
         """Wait to respect rate limits."""
-        import time
         elapsed = time.time() - self._last_request
         if elapsed < DELAY_SECONDS:
             time.sleep(DELAY_SECONDS - elapsed)
@@ -63,12 +63,18 @@ class WebCrawler:
                     "links": result.links if get_links and hasattr(result, 'links') else [],
                 }
         except Exception as e:
-            print(f"Error: {e}")
+            print(f"[Crawler] Error scraping {url}: {e}")
         return None
+    
+    @staticmethod
+    def _remove_diacritics(text: str) -> str:
+        """Remove Vietnamese diacritics: 'văn hóa' -> 'van hoa'"""
+        nfkd = unicodedata.normalize('NFKD', text)
+        return ''.join(c for c in nfkd if not unicodedata.combining(c)).lower()
     
     def crawl_single(self, url: str) -> list[dict]:
         """Mode: single - Crawl only the given URL."""
-        print(f"[single] Scraping: {url}")
+        print(f"[Crawler] Mode: single | URL: {url}")
         result = self._scrape_page(url)
         if result:
             result.pop("links", None)
@@ -76,52 +82,36 @@ class WebCrawler:
         return []
     
     def crawl_links(self, url: str, max_pages: int = 10, topic: str = "") -> list[dict]:
-        """Mode: links - Crawl URL + links containing topic keywords.
-        
-        Args:
-            topic: Required. Keywords separated by comma, e.g. "văn hóa,du lịch"
-        """
-        from urllib.parse import unquote
-        import unicodedata
-        
-        def remove_diacritics(text: str) -> str:
-            """Remove Vietnamese diacritics: 'văn hóa' -> 'van hoa'"""
-            # Normalize to decomposed form and remove combining marks
-            nfkd = unicodedata.normalize('NFKD', text)
-            return ''.join(c for c in nfkd if not unicodedata.combining(c)).lower()
-        
+        """Mode: links - Crawl URL + links containing topic keywords."""
         if not topic:
             raise ValueError("Topic required for links mode. Use comma to separate keywords.")
         
-        # Parse keywords and create normalized versions
         keywords = [k.strip() for k in topic.split(",") if k.strip()]
-        keywords_normalized = [remove_diacritics(k).replace("_", " ").replace("-", " ") for k in keywords]
-        print(f"[links] Keywords: {keywords}")
-        print(f"[links] Normalized: {keywords_normalized}")
-        print(f"[links] Scraping main page: {url}")
-        documents = []
+        keywords_normalized = [self._remove_diacritics(k).replace("_", " ").replace("-", " ") for k in keywords]
         
-        # Scrape main page with links
+        print(f"[Crawler] Mode: links | URL: {url}")
+        print(f"[Crawler] Keywords: {keywords}")
+        print(f"[Crawler] Scraping main page...")
+        
+        documents = []
         main_result = self._scrape_page(url, get_links=True)
         if not main_result:
             return []
         
         links = main_result.pop("links", [])
         documents.append(main_result)
-        print(f"Found {len(links)} total links")
+        print(f"[Crawler] Found {len(links)} total links")
         
         if not links or max_pages <= 1:
             return documents
         
-        # Process links - filter by keywords
         urls_to_scrape = []
         source_domain = urlparse(url).netloc
         
-        # Patterns to skip (non-content URLs)
         skip_patterns = [
-            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp',  # images
-            '.pdf', '.doc', '.docx', '.xls', '.xlsx',  # documents
-            '/Special:', '/Đặc_biệt:', '/Tập_tin:', '/File:',  # wiki special
+            '.jpg', '.jpeg', '.png', '.gif', '.svg', '.webp',
+            '.pdf', '.doc', '.docx', '.xls', '.xlsx',
+            '/Special:', '/Đặc_biệt:', '/Tập_tin:', '/File:',
             '/Thể_loại:', '/Category:', '/Help:', '/Wikipedia:',
             'action=edit', 'action=history', 'oldid=', 'diff=',
             '/w/index.php', '/wiki/index.php',
@@ -129,7 +119,6 @@ class WebCrawler:
         ]
         
         for link in links:
-            # Extract URL from link object
             if hasattr(link, 'url'):
                 link_url = link.url
             elif isinstance(link, str):
@@ -142,42 +131,31 @@ class WebCrawler:
             if not link_url:
                 continue
             
-            # Filter: same domain only
             link_domain = urlparse(link_url).netloc
             if link_domain and link_domain != source_domain:
                 continue
             
-            # Skip non-content URLs
             decoded_url = unquote(link_url)
-            skip = False
-            for pattern in skip_patterns:
-                if pattern.lower() in decoded_url.lower():
-                    skip = True
-                    break
-            if skip:
+            if any(p.lower() in decoded_url.lower() for p in skip_patterns):
                 continue
             
-            # Normalize URL for comparison (decode + remove diacritics + normalize separators)
-            normalized_url = remove_diacritics(unquote(link_url)).replace("_", " ").replace("-", " ")
+            normalized_url = self._remove_diacritics(decoded_url).replace("_", " ").replace("-", " ")
             
-            # Check if any keyword matches (using normalized versions)
-            matched = False
             for i, kw_norm in enumerate(keywords_normalized):
                 if kw_norm in normalized_url:
-                    matched = True
-                    print(f"  Match: '{keywords[i]}' in {decoded_url}")
+                    print(f"        Match: '{keywords[i]}' in {decoded_url}")
+                    urls_to_scrape.append(link_url)
                     break
-            
-            if matched:
-                urls_to_scrape.append(link_url)
         
-        print(f"Matched links: {len(urls_to_scrape)}")
+        print(f"[Crawler] Matched {len(urls_to_scrape)} links")
         
         if not urls_to_scrape:
             return documents
         
-        print(f"Scraping {min(len(urls_to_scrape), max_pages - 1)} pages...")
-        for page_url in tqdm(urls_to_scrape[:max_pages - 1], desc="Scraping"):
+        scrape_count = min(len(urls_to_scrape), max_pages - 1)
+        print(f"[Crawler] Scraping {scrape_count} pages...")
+        
+        for page_url in tqdm(urls_to_scrape[:scrape_count], desc="Scraping"):
             if page_url == url:
                 continue
             result = self._scrape_page(page_url)
@@ -189,13 +167,12 @@ class WebCrawler:
     
     def crawl_search(self, url: str, topic: str, max_pages: int = 10) -> list[dict]:
         """Mode: search - Use map API to find URLs by topic, then scrape."""
-        print(f"[search] Mapping: {url} | Topic: {topic}")
+        print(f"[Crawler] Mode: search | URL: {url} | Topic: {topic}")
         documents = []
         
         try:
             map_result = self.app.map(url=url, search=topic, limit=max_pages)
             
-            # Extract URLs
             urls_to_scrape = []
             if hasattr(map_result, 'links'):
                 for link in map_result.links:
@@ -209,10 +186,10 @@ class WebCrawler:
                         urls_to_scrape.append(link)
                         
         except Exception as e:
-            print(f"Map error: {e}")
+            print(f"[Crawler] Error: Map API failed - {e}")
             return []
         
-        print(f"Found {len(urls_to_scrape)} URLs")
+        print(f"[Crawler] Found {len(urls_to_scrape)} URLs")
         
         for page_url in tqdm(urls_to_scrape, desc="Scraping"):
             result = self._scrape_page(page_url)
@@ -224,7 +201,7 @@ class WebCrawler:
     
     def crawl_domain(self, url: str, max_pages: int = 10, topic: str | None = None) -> list[dict]:
         """Mode: domain - Use crawl API to crawl domain."""
-        print(f"[domain] Crawling: {url}")
+        print(f"[Crawler] Mode: domain | URL: {url}")
         documents = []
         
         crawl_options = {
@@ -259,9 +236,9 @@ class WebCrawler:
                     })
                     
         except Exception as e:
-            print(f"Crawl error: {e}")
+            print(f"[Crawler] Error: Crawl API failed - {e}")
         
-        print(f"Crawled {len(documents)} pages")
+        print(f"[Crawler] Crawled {len(documents)} pages")
         return documents
 
 
@@ -296,7 +273,7 @@ def crawl_website(
     else:
         raise ValueError(f"Unknown mode: {mode}. Use: single, links, search, domain")
     
-    print(f"Total: {len(documents)} documents")
+    print(f"[Crawler] Total: {len(documents)} documents")
     
     return {
         "source": url,
@@ -311,16 +288,16 @@ def crawl_website(
 
 def save_crawled_data(data: dict, output_dir: str = "data/crawled", filename: str | None = None) -> Path:
     """Save crawled data to JSON."""
-    output_dir = Path(output_dir)
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_path = Path(output_dir)
+    output_path.mkdir(parents=True, exist_ok=True)
     
     if not filename:
         domain = data.get("domain", "unknown").replace(".", "_")
         filename = f"{domain}_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
     
-    path = output_dir / filename
+    path = output_path / filename
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
     
-    print(f"Saved: {path}")
+    print(f"[Crawler] Saved: {path}")
     return path
