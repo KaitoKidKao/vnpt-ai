@@ -7,10 +7,18 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from src.config import DATA_INPUT_DIR, DATA_OUTPUT_DIR, BATCH_SIZE
+from src.config import BATCH_SIZE, DATA_INPUT_DIR, DATA_OUTPUT_DIR
 from src.graph import GraphState, get_graph
 from src.utils.ingestion import ingest_knowledge_base
-from src.utils.llm import get_small_model, get_large_model
+from src.utils.llm import get_large_model, get_small_model
+from src.utils.logging import (
+    log_done,
+    log_main,
+    log_pipeline,
+    log_stats,
+    print_header,
+    print_log,
+)
 
 
 class QuestionInput(BaseModel):
@@ -27,6 +35,7 @@ class QuestionInput(BaseModel):
 
 class PredictionOutput(BaseModel):
     """Output schema for a prediction."""
+
     qid: str = Field(description="Question identifier")
     answer: str = Field(description="Predicted answer: A, B, C, D or 'Từ chối trả lời'")
 
@@ -53,41 +62,41 @@ def question_to_state(q: QuestionInput) -> GraphState:
     }
 
 
-
 async def run_pipeline_async(
     questions: list[QuestionInput],
     force_reingest: bool = False,
     batch_size: int = BATCH_SIZE,
 ) -> list[PredictionOutput]:
     """Run pipeline with Semaphore for maximum throughput."""
-    
-    print("[Pipeline] Initializing knowledge base...")
+    log_pipeline("Initializing knowledge base...")
     ingest_knowledge_base(force=force_reingest)
 
     graph = get_graph()
     total = len(questions)
     start_time = time.perf_counter()
-    
+
     sem = asyncio.Semaphore(batch_size)
 
     async def process_single_question(q: QuestionInput):
         async with sem:
+            print_log(f"\n[{q.qid}] {q.question}")
+            print(f"   A. {q.A:<20} B. {q.B:<20}")
+            print(f"   C. {q.C:<20} D. {q.D:<20}")
             state = question_to_state(q)
             result = await graph.ainvoke(state)
-            
-            answer = result["answer"]            
+
+            answer = result["answer"]
             route = result.get("route", "unknown")
-            print(f"  [Done] {q.qid}: {answer} (Route: {route})")
+            log_done(f"{q.qid}: {answer} (Route: {route})")
             return PredictionOutput(qid=q.qid, answer=answer)
-    
+
     tasks = [process_single_question(q) for q in questions]
-    
+
     predictions = await asyncio.gather(*tasks)
 
     elapsed = time.perf_counter() - start_time
     throughput = total / elapsed if elapsed > 0 else 0
-    print(f"\n[Pipeline] Completed {total} questions in {elapsed:.2f}s "
-          f"({throughput:.2f} req/s)")
+    log_stats(f"Completed {total} questions in {elapsed:.2f}s ({throughput:.2f} req/s)")
 
     return predictions
 
@@ -99,36 +108,35 @@ def save_predictions(predictions: list[PredictionOutput], output_path: Path) -> 
         writer.writeheader()
         for pred in predictions:
             writer.writerow({"qid": pred.qid, "answer": pred.answer})
-    print(f"[Pipeline] Predictions saved to: {output_path}")
+    log_pipeline(f"Predictions saved to: {output_path}")
 
 
 async def async_main(batch_size: int = BATCH_SIZE) -> None:
     """Async main entry point."""
     get_small_model()
     get_large_model()
-    print("[Main] Models warmed up ready.")
-    
+    log_main("Models warmed up ready.")
+
     input_file = DATA_INPUT_DIR / "private_test.csv"
     if not input_file.exists():
         input_file = DATA_INPUT_DIR / "public_test.csv"
 
     if not input_file.exists():
-        print("[Main] Test file not found. Generating dummy data...")
+        log_main("Test file not found. Generating dummy data...")
         from scripts.generate_data import generate_knowledge_base
+
         generate_knowledge_base()
 
-    print(f"[Main] Loading test data from: {input_file}")
+    log_main(f"Loading test data from: {input_file}")
     questions = load_test_data(input_file)
-    print(f"[Main] Loaded {len(questions)} questions (batch_size={batch_size})")
+    log_main(f"Loaded {len(questions)} questions (batch_size={batch_size})")
 
     predictions = await run_pipeline_async(questions, batch_size=batch_size)
 
     output_file = DATA_OUTPUT_DIR / "pred.csv"
     save_predictions(predictions, output_file)
 
-    print("\n" + "=" * 50)
-    print("RESULTS SUMMARY")
-    print("=" * 50)
+    print_header("RESULTS SUMMARY")
     for pred in predictions:
         print(f"  {pred.qid}: {pred.answer}")
 

@@ -8,6 +8,7 @@ from langchain_experimental.utilities import PythonREPL
 from src.config import settings
 from src.graph import GraphState
 from src.utils.llm import get_large_model
+from src.utils.logging import print_log
 
 _python_repl = PythonREPL()
 
@@ -37,12 +38,14 @@ for key, val in options.items():
         
 Chỉ trả về block code Python, không giải thích thêm."""
 
+
 def extract_python_code(text: str) -> str | None:
     """Find and extract Python code from block ``` python ...   ```"""
     match = re.search(r"```(?:python)?\s*(.*?)```", text, re.DOTALL | re.IGNORECASE)
     if match:
         return match.group(1).strip()
     return None
+
 
 def extract_answer(text: str) -> str | None:
     """Find 'Đáp án: X' in the text response"""
@@ -51,9 +54,11 @@ def extract_answer(text: str) -> str | None:
         return match.group(1).upper()
     return None
 
+
 def _indent_code(code: str) -> str:
     """Format code to make it easier to read in the terminal"""
     return "\n".join(f"        {line}" for line in code.splitlines())
+
 
 def logic_solver_node(state: GraphState) -> dict:
     llm = get_large_model()
@@ -70,18 +75,18 @@ def logic_solver_node(state: GraphState) -> dict:
         HumanMessage(content=question_content)
     ]
 
-    max_steps = 5 
+    max_steps = 5
     for step in range(max_steps):
         response = llm.invoke(messages)
         content = response.content
         messages.append(response)
 
         code_block = extract_python_code(content)
-        
+
         if code_block:
-            print(f"        [Logic] Step {step+1}: Found Python code. Executing...")
+            print_log(f"        [Logic] Step {step+1}: Found Python code. Executing...")
             print(_indent_code(code_block))
-            
+
             try:
                 if "print" not in code_block:
                     lines = code_block.splitlines()
@@ -95,28 +100,28 @@ def logic_solver_node(state: GraphState) -> dict:
 
                 output = _python_repl.run(code_block)
                 output = output.strip() if output else "No output."
-                print(f"        [Logic] Code output: {output}")
+                print_log(f"        [Logic] Code output: {output}")
 
                 code_ans = extract_answer(output)
                 if code_ans:
-                    print(f"        [Logic] Final Answer: {code_ans}")
+                    print_log(f"        [Logic] Final Answer: {code_ans}")
                     return {"answer": code_ans}
 
                 feedback_msg = f"Kết quả chạy code: {output}.\n"
-                feedback_msg += "Lưu ý: Bạn vẫn chưa đưa ra đáp án cuối cùng, duyệt lại code và các đáp án để chỉnh sửa phù hợp." 
-                
+                feedback_msg += "Lưu ý: Bạn vẫn chưa đưa ra đáp án cuối cùng, duyệt lại code và các đáp án để chỉnh sửa phù hợp."
+
                 messages.append(HumanMessage(content=feedback_msg))
-            
+
             except Exception as e:
                 error_msg = f"Error running code: {str(e)}"
-                print(f"        [Logic] Error: {error_msg}")
+                print_log(f"        [Error] {error_msg}")
                 messages.append(HumanMessage(content=f"{error_msg}. Hãy kiểm tra logic và sửa lại code."))
-            
-            continue 
+
+            continue
 
         if step < max_steps - 1:
-            print("        [Logic] Warning: No code or answer found. Reminding model...")
+            print_log("        [Warning] No code or answer found. Reminding model...")
             messages.append(HumanMessage(content="Lưu ý: Bạn vẫn chưa đưa ra đáp án cuối cùng, duyệt lại code và các đáp án để chỉnh sửa phù hợp."))
 
-    print("        [Logic] Warning: Max steps reached. Defaulting to A.")
+    print_log("        [Warning] Max steps reached. Defaulting to A.")
     return {"answer": "A"}

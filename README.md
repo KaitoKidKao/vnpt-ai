@@ -72,7 +72,7 @@ graph TD
 1.  **Clone the repository**
 
     ```bash
-    git clone [https://github.com/duongtruongbinh/vnpt-ai](https://github.com/duongtruongbinh/vnpt-ai)
+    git clone https://github.com/duongtruongbinh/vnpt-ai
     cd vnpt-ai
     ```
 
@@ -107,7 +107,7 @@ Expand your knowledge base by crawling websites or adding local documents.
 * Crawl Data: Fetch content from websites using the crawler CLI.
   ```bash
   # Example: Crawl a website filtering by topic
-  uv run python scripts/crawl.py --url [https://example.com](https://example.com) --mode links --topic "Vietnam History"
+  uv run python scripts/crawl.py --url https://example.com --mode links --topic "Vietnam History"
   ```
 
 * Ingest Data: Load crawled JSON files or local documents (PDF, DOCX, TXT) into the Qdrant vector store.

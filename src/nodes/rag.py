@@ -8,6 +8,7 @@ from src.config import settings
 from src.graph import GraphState
 from src.utils.ingestion import get_vector_store
 from src.utils.llm import get_large_model
+from src.utils.logging import print_log
 
 RAG_SYSTEM_PROMPT = """Bạn là trợ lý AI. Dựa vào văn bản cung cấp, hãy suy luận logic để chọn đáp án đúng nhất.
 Văn bản:
@@ -27,21 +28,22 @@ B. {option_b}
 C. {option_c}
 D. {option_d}"""
 
+
 def knowledge_rag_node(state: GraphState) -> dict:
     """Retrieve relevant context and answer knowledge-based questions."""
-    
     vector_store = get_vector_store()
 
     query = state["question"]
-    print(f"        [RAG] Retrieving context for: '{query}'")
-    
+    print_log(f"        [RAG] Retrieving context for: '{query}'")
+
     docs = vector_store.similarity_search(query, k=settings.top_k_retrieval)
     context = "\n\n".join([doc.page_content for doc in docs])
 
     if docs:
-        print(f"        [RAG] Found {len(docs)} documents. Top match: \"{docs[0].page_content[:100]}...\"")
+        print_log(f"        [RAG] Found {len(docs)} documents. "
+                  f"Top match: \"{docs[0].page_content[:100]}...\"")
     else:
-        print("        [RAG] Warning: No relevant documents found in Knowledge Base.")
+        print_log("        [Warning] No relevant documents found in Knowledge Base.")
 
     llm = get_large_model()
     prompt = ChatPromptTemplate.from_messages([
@@ -59,19 +61,21 @@ def knowledge_rag_node(state: GraphState) -> dict:
         "option_d": state["option_d"],
     })
     content = response.content.strip()
-    print(f"        [RAG] Reasoning: {content[:200]}...")
-    
+    print_log(f"        [RAG] Reasoning: {content}")
+
     answer = extract_answer(content)
-    print(f"        [RAG] Final Answer: {answer}")
+    print_log(f"        [RAG] Final Answer: {answer}")
     return {"answer": answer, "context": context}
+
 
 def safety_guard_node(state: GraphState) -> dict:
     """Handle toxic/sensitive questions with refusal response."""
-    print("        [Safety] Blocked toxic content/options.")
+    print_log("        [Safety] Blocked toxic content/options.")
     return {
-        "answer": "Từ chối trả lời", 
+        "answer": "Từ chối trả lời",
         "context": "Nội dung hoặc lựa chọn không phù hợp. Hệ thống từ chối trả lời.",
     }
+
 
 def extract_answer(response: str) -> str:
     """Robust extraction of answer from CoT response."""
