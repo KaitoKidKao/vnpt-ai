@@ -2,13 +2,16 @@
 
 import asyncio
 import csv
+import json
+import string
 import time
 from pathlib import Path
 
 from pydantic import BaseModel, Field
 
 from src.config import BATCH_SIZE, DATA_INPUT_DIR, DATA_OUTPUT_DIR
-from src.graph import GraphState, get_graph
+from src.graph import get_graph
+from src.state import GraphState
 from src.utils.ingestion import ingest_knowledge_base
 from src.utils.llm import get_large_model, get_small_model
 from src.utils.logging import (
@@ -26,40 +29,107 @@ class QuestionInput(BaseModel):
 
     qid: str = Field(description="Question identifier")
     question: str = Field(description="Question text in Vietnamese")
-    A: str = Field(description="Option A")
-    B: str = Field(description="Option B")
-    C: str = Field(description="Option C")
-    D: str = Field(description="Option D")
-    category: str | None = Field(default=None, description="Question category")
+    choices: list[str] = Field(description="List of answer choices")
+    answer: str | None = Field(default=None, description="Correct answer (A, B, C, ...)")
 
 
 class PredictionOutput(BaseModel):
     """Output schema for a prediction."""
 
     qid: str = Field(description="Question identifier")
-    answer: str = Field(description="Predicted answer: A, B, C, D or 'Từ chối trả lời'")
+    answer: str = Field(description="Predicted answer: A, B, C, D, ... or 'Từ chối trả lời'")
+
+
+def _choices_to_options(choices: list[str]) -> dict[str, str]:
+    """Convert choices list to option dictionary (A, B, C, D, ...).
+    
+    Args:
+        choices: List of choice strings
+        
+    Returns:
+        Dictionary mapping option letters (A, B, C, ...) to choice text
+    """
+    option_labels = string.ascii_uppercase
+    options = {}
+    for i, choice in enumerate(choices):
+        if i < len(option_labels):
+            options[option_labels[i]] = choice
+    return options
 
 
 def load_test_data(file_path: Path) -> list[QuestionInput]:
-    """Load test questions from CSV file."""
-    questions = []
+    """Load test questions from JSON file.
+
+    Args:
+        file_path: Path to the test data JSON file
+
+    Returns:
+        List of QuestionInput objects
+
+    Raises:
+        ValueError: If file is not JSON or data format is invalid
+        FileNotFoundError: If file does not exist
+    """
+    if not file_path.exists():
+        raise FileNotFoundError(f"Test data file not found: {file_path}")
+
+    if file_path.suffix.lower() != ".json":
+        raise ValueError(f"Only JSON files are supported: {file_path}")
+
     with open(file_path, encoding="utf-8") as f:
-        reader = csv.DictReader(f)
-        for row in reader:
-            questions.append(QuestionInput(**row))
+        data = json.load(f)
+
+    if not isinstance(data, list):
+        raise ValueError(f"JSON file must contain a list of questions: {file_path}")
+
+    questions = []
+    for item in data:
+        if "choices" not in item or not isinstance(item["choices"], list):
+            raise ValueError(f"Question {item.get('qid', 'unknown')} must have 'choices' as a list")
+        
+        questions.append(QuestionInput(
+            qid=item["qid"],
+            question=item["question"],
+            choices=item["choices"],
+            answer=item.get("answer"),
+        ))
+
     return questions
 
 
 def question_to_state(q: QuestionInput) -> GraphState:
-    """Convert QuestionInput to GraphState."""
-    return {
+    """Convert QuestionInput to GraphState.
+    
+    Includes all choices for questions with more than 4 options.
+    """
+    options = _choices_to_options(q.choices)
+    
+    state: GraphState = {
         "question_id": q.qid,
         "question": q.question,
-        "option_a": q.A,
-        "option_b": q.B,
-        "option_c": q.C,
-        "option_d": q.D,
+        "option_a": options.get("A", ""),
+        "option_b": options.get("B", ""),
+        "option_c": options.get("C", ""),
+        "option_d": options.get("D", ""),
+        "all_choices": q.choices,
     }
+    return state
+
+
+def _format_choices_display(choices: list[str]) -> str:
+    """Format choices for display."""
+    option_labels = string.ascii_uppercase
+    lines = []
+    for i in range(0, len(choices), 2):
+        line_parts = []
+        for j in range(2):
+            idx = i + j
+            if idx < len(choices):
+                label = option_labels[idx] if idx < len(option_labels) else str(idx)
+                line_parts.append(f"{label}. {choices[idx]:<30}")
+        if line_parts:
+            lines.append("   " + " ".join(line_parts))
+    return "\n".join(lines)
 
 
 async def run_pipeline_async(
@@ -80,13 +150,26 @@ async def run_pipeline_async(
     async def process_single_question(q: QuestionInput):
         async with sem:
             print_log(f"\n[{q.qid}] {q.question}")
-            print(f"   A. {q.A:<20} B. {q.B:<20}")
-            print(f"   C. {q.C:<20} D. {q.D:<20}")
+            print(_format_choices_display(q.choices))
             state = question_to_state(q)
             result = await graph.ainvoke(state)
 
             answer = result["answer"]
             route = result.get("route", "unknown")
+            
+            # Validate answer is within valid range
+            num_choices = len(q.choices)
+            option_labels = string.ascii_uppercase
+            valid_answers = option_labels[:num_choices]
+            
+            if answer not in valid_answers:
+                if answer.upper() in ["TỪ CHỐI TRẢ LỜI", "TỪCHỐITRẢLỜI"]:
+                    answer = "Từ chối trả lời"
+                else:
+                    # Fallback to first valid option if answer is invalid
+                    print_log(f"        [Warning] Invalid answer '{answer}' for {q.qid}, defaulting to A")
+                    answer = "A"
+            
             log_done(f"{q.qid}: {answer} (Route: {route})")
             return PredictionOutput(qid=q.qid, answer=answer)
 
@@ -111,21 +194,34 @@ def save_predictions(predictions: list[PredictionOutput], output_path: Path) -> 
     log_pipeline(f"Predictions saved to: {output_path}")
 
 
+def _find_test_file() -> Path | None:
+    """Find the first available test JSON file in DATA_INPUT_DIR."""
+    candidates = [
+        "val.json",
+        "test.json",
+        "private_test.json",
+        "public_test.json",
+    ]
+    for filename in candidates:
+        path = DATA_INPUT_DIR / filename
+        if path.exists():
+            return path
+    return None
+
+
 async def async_main(batch_size: int = BATCH_SIZE) -> None:
     """Async main entry point."""
     get_small_model()
     get_large_model()
     log_main("Models warmed up ready.")
 
-    input_file = DATA_INPUT_DIR / "private_test.csv"
-    if not input_file.exists():
-        input_file = DATA_INPUT_DIR / "public_test.csv"
+    input_file = _find_test_file()
 
-    if not input_file.exists():
-        log_main("Test file not found. Generating dummy data...")
-        from scripts.generate_data import generate_knowledge_base
-
-        generate_knowledge_base()
+    if input_file is None:
+        raise FileNotFoundError(
+            f"No test JSON file found in {DATA_INPUT_DIR}. "
+            "Expected files: test.json, val.json, private_test.json, or public_test.json"
+        )
 
     log_main(f"Loading test data from: {input_file}")
     questions = load_test_data(input_file)
@@ -133,12 +229,14 @@ async def async_main(batch_size: int = BATCH_SIZE) -> None:
 
     predictions = await run_pipeline_async(questions, batch_size=batch_size)
 
-    output_file = DATA_OUTPUT_DIR / "pred.csv"
+    output_file = DATA_OUTPUT_DIR / "submission.csv"
     save_predictions(predictions, output_file)
 
     print_header("RESULTS SUMMARY")
-    for pred in predictions:
+    for pred in predictions[:10]:
         print(f"  {pred.qid}: {pred.answer}")
+    if len(predictions) > 10:
+        print(f"  ... and {len(predictions) - 10} more")
 
 
 def main(batch_size: int = BATCH_SIZE) -> None:

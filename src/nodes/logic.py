@@ -5,8 +5,7 @@ import re
 from langchain_core.messages import BaseMessage, HumanMessage, SystemMessage
 from langchain_experimental.utilities import PythonREPL
 
-from src.config import settings
-from src.graph import GraphState
+from src.state import GraphState
 from src.utils.llm import get_large_model
 from src.utils.logging import print_log
 
@@ -47,11 +46,14 @@ def extract_python_code(text: str) -> str | None:
     return None
 
 
-def extract_answer(text: str) -> str | None:
+def extract_answer(text: str, max_choices: int = 26) -> str | None:
     """Find 'Đáp án: X' in the text response"""
-    match = re.search(r"Đáp án:\s*([A-D])", text, re.IGNORECASE)
+    valid_labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"[:max_choices]
+    match = re.search(r"Đáp án:\s*([A-Z])", text, re.IGNORECASE)
     if match:
-        return match.group(1).upper()
+        answer = match.group(1).upper()
+        if answer in valid_labels:
+            return answer
     return None
 
 
@@ -62,13 +64,27 @@ def _indent_code(code: str) -> str:
 
 def logic_solver_node(state: GraphState) -> dict:
     llm = get_large_model()
+    
+    all_choices = state.get("all_choices", [])
+    if not all_choices:
+        all_choices = [
+            state.get("option_a", ""),
+            state.get("option_b", ""),
+            state.get("option_c", ""),
+            state.get("option_d", ""),
+        ]
+        all_choices = [c for c in all_choices if c]
+    
+    import string
+    option_labels = string.ascii_uppercase
+    choices_lines = []
+    for i, choice in enumerate(all_choices):
+        if i < len(option_labels):
+            choices_lines.append(f"{option_labels[i]}. {choice}")
+    
     question_content = f"""
     Câu hỏi: {state["question"]}
-    A. {state["option_a"]}
-    B. {state["option_b"]}
-    C. {state["option_c"]}
-    D. {state["option_d"]}
-    """
+    """ + "\n".join(choices_lines)
 
     messages: list[BaseMessage] = [
         SystemMessage(content=CODE_AGENT_PROMPT),
@@ -85,7 +101,7 @@ def logic_solver_node(state: GraphState) -> dict:
 
         if code_block:
             print_log(f"        [Logic] Step {step+1}: Found Python code. Executing...")
-            print(_indent_code(code_block))
+            print_log(f"        [Logic] Code:\n{_indent_code(code_block)}")
 
             try:
                 if "print" not in code_block:
@@ -102,7 +118,8 @@ def logic_solver_node(state: GraphState) -> dict:
                 output = output.strip() if output else "No output."
                 print_log(f"        [Logic] Code output: {output}")
 
-                code_ans = extract_answer(output)
+                num_choices = len(state.get("all_choices", [])) or 4
+                code_ans = extract_answer(output, max_choices=num_choices)
                 if code_ans:
                     print_log(f"        [Logic] Final Answer: {code_ans}")
                     return {"answer": code_ans}

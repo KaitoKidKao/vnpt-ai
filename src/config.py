@@ -15,9 +15,75 @@ DATA_INPUT_DIR = Path(os.getenv("DATA_INPUT_DIR", PROJECT_ROOT / "data"))
 DATA_OUTPUT_DIR = Path(os.getenv("DATA_OUTPUT_DIR", PROJECT_ROOT / "data"))
 BATCH_SIZE = 4
 
+
 class Settings(BaseSettings):
     """Application settings with environment variable support."""
 
+    use_vnpt_api: bool = Field(
+        default=False,
+        alias="USE_VNPT_API",
+        description="If True, use VNPT API; otherwise use local HuggingFace models",
+    )
+
+    vnpt_large_authorization: str = Field(
+        default="",
+        alias="VNPT_LARGE_AUTHORIZATION",
+        description="Full Authorization header value (including 'Bearer ') for large model",
+    )
+    vnpt_large_token_id: str = Field(
+        default="",
+        alias="VNPT_LARGE_TOKEN_ID",
+    )
+    vnpt_large_token_key: str = Field(
+        default="",
+        alias="VNPT_LARGE_TOKEN_KEY",
+    )
+
+    # VNPT API - Small Model credentials
+    vnpt_small_authorization: str = Field(
+        default="",
+        alias="VNPT_SMALL_AUTHORIZATION",
+        description="Full Authorization header value (including 'Bearer ') for small model",
+    )
+    vnpt_small_token_id: str = Field(
+        default="",
+        alias="VNPT_SMALL_TOKEN_ID",
+    )
+    vnpt_small_token_key: str = Field(
+        default="",
+        alias="VNPT_SMALL_TOKEN_KEY",
+    )
+
+    # VNPT API - Embedding Model credentials
+    vnpt_embedding_authorization: str = Field(
+        default="",
+        alias="VNPT_EMBEDDING_AUTHORIZATION",
+        description="Full Authorization header value (including 'Bearer ') for embedding model",
+    )
+    vnpt_embedding_token_id: str = Field(
+        default="",
+        alias="VNPT_EMBEDDING_TOKEN_ID",
+    )
+    vnpt_embedding_token_key: str = Field(
+        default="",
+        alias="VNPT_EMBEDDING_TOKEN_KEY",
+    )
+
+    # VNPT API endpoints
+    vnpt_small_endpoint: str = Field(
+        default="https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small",
+        alias="VNPT_SMALL_ENDPOINT",
+    )
+    vnpt_large_endpoint: str = Field(
+        default="https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-large",
+        alias="VNPT_LARGE_ENDPOINT",
+    )
+    vnpt_embedding_endpoint: str = Field(
+        default="https://api.idg.vnpt.vn/data-service/vnptai-hackathon-embedding",
+        alias="VNPT_EMBEDDING_ENDPOINT",
+    )
+
+    # Local HuggingFace models
     llm_model_small: str = Field(
         default="/mnt/dataset1/pretrained_fm/Qwen_Qwen3-4B-Instruct-2507",
         alias="LLM_MODEL_SMALL",
@@ -30,6 +96,8 @@ class Settings(BaseSettings):
         default="bkai-foundation-models/vietnamese-bi-encoder",
         alias="EMBEDDING_MODEL",
     )
+
+    # Vector database
     qdrant_collection: str = Field(
         default="vnpt_knowledge_base",
         alias="QDRANT_COLLECTION",
@@ -38,6 +106,8 @@ class Settings(BaseSettings):
         default="",
         alias="VECTOR_DB_PATH",
     )
+
+    # Chunking
     chunk_size: int = 300
     chunk_overlap: int = 50
     top_k_retrieval: int = 3
@@ -55,4 +125,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-

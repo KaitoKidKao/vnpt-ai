@@ -18,34 +18,46 @@ PREFIX_COLORS: dict[str, str] = {
     "Router": Fore.CYAN,
     "Logic": Fore.MAGENTA,
     "Safety": Fore.YELLOW,
+    "Direct": Fore.CYAN,
 }
 
-BRACKET_PATTERN = re.compile(r"^\[([^\]]+)\]")
+BRACKET_PATTERN = re.compile(r"^\s*\[([^\]]+)\]")
 
 
 def get_prefix_color(prefix: str) -> str:
     """Get color for a given prefix, with fallback for question IDs."""
-    if prefix in PREFIX_COLORS:
-        return PREFIX_COLORS[prefix]
-    if prefix.startswith("Q") or prefix[0].isdigit():
+    prefix_clean = prefix.strip()
+    if prefix_clean in PREFIX_COLORS:
+        return PREFIX_COLORS[prefix_clean]
+    if prefix_clean.startswith("Q") or (prefix_clean and prefix_clean[0].isdigit()):
         return Fore.LIGHTBLUE_EX
     return Fore.WHITE
 
 
 def print_log(message: str, end: str = "\n") -> None:
     """Print a log message with colored bracket prefix.
-
+    
+    Supports leading whitespace before the bracket prefix.
+    
     Args:
-        message: Log message, optionally starting with [Prefix].
+        message: Log message, optionally starting with [Prefix] (may have leading whitespace).
         end: String appended after the message (default newline).
     """
     match = BRACKET_PATTERN.match(message)
     if match:
         prefix = match.group(1)
         color = get_prefix_color(prefix)
+        
+        # Find the start and end positions of the bracket prefix
+        prefix_start = match.start()
+        prefix_end = match.end()
+        
+        # Extract leading whitespace, colored prefix, and rest of message
+        leading_whitespace = message[:prefix_start]
         colored_prefix = f"{color}[{prefix}]{Style.RESET_ALL}"
-        rest = message[match.end():]
-        print(f"{colored_prefix}{rest}", end=end)
+        rest = message[prefix_end:]
+        
+        print(f"{leading_whitespace}{colored_prefix}{rest}", end=end)
     else:
         print(message, end=end)
 
@@ -86,4 +98,3 @@ def print_header(title: str, char: str = "=", width: int = 50) -> None:
     padding = (width - len(title)) // 2
     print(Fore.WHITE + " " * padding + title + Style.RESET_ALL)
     print_separator(char, width)
-

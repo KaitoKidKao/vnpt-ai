@@ -1,10 +1,11 @@
 """Knowledge base ingestion utilities for Qdrant vector store."""
 
 import json
-import sys
 from pathlib import Path
 
+import httpx
 import torch
+from langchain_core.embeddings import Embeddings
 from langchain_huggingface import HuggingFaceEmbeddings
 from langchain_qdrant import QdrantVectorStore
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -13,9 +14,80 @@ from qdrant_client.models import Distance, VectorParams
 
 from src.config import DATA_INPUT_DIR, settings
 
-_embeddings: HuggingFaceEmbeddings | None = None
+_embeddings: Embeddings | None = None
 _qdrant_client: QdrantClient | None = None
 _vector_store: QdrantVectorStore | None = None
+
+
+class VNPTEmbeddings(Embeddings):
+    """LangChain-compatible wrapper for VNPT Embedding API."""
+
+    def __init__(
+        self,
+        endpoint: str,
+        authorization: str,  # Full header value including "Bearer "
+        token_id: str,
+        token_key: str,
+        model_name: str = "vnptai_hackathon_embedding",
+        timeout: float = 60.0,
+    ):
+        self.endpoint = endpoint
+        self.authorization = authorization
+        self.token_id = token_id
+        self.token_key = token_key
+        self.model_name = model_name
+        self.timeout = timeout
+
+    def _get_headers(self) -> dict[str, str]:
+        return {
+            "Authorization": self.authorization,
+            "Token-id": self.token_id,
+            "Token-key": self.token_key,
+            "Content-Type": "application/json",
+        }
+
+    def _embed(self, texts: list[str]) -> list[list[float]]:
+        """Call VNPT API to get embeddings."""
+        payload = {"model": self.model_name, "input": texts}
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    self.endpoint,
+                    headers=self._get_headers(),
+                    json=payload,
+                )
+                response.raise_for_status()
+                data = response.json()
+
+            embeddings = [item["embedding"] for item in data["data"]]
+            return embeddings
+
+        except httpx.HTTPStatusError as e:
+            raise RuntimeError(
+                f"VNPT Embedding API error ({e.response.status_code}): {e.response.text}"
+            ) from e
+        except httpx.RequestError as e:
+            raise RuntimeError(f"VNPT Embedding API request failed: {e}") from e
+        except (KeyError, IndexError) as e:
+            raise RuntimeError(f"Unexpected VNPT Embedding API response: {e}") from e
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        """Embed a list of documents."""
+        if not texts:
+            return []
+        # Process in batches to avoid API limits
+        batch_size = 32
+        all_embeddings = []
+        for i in range(0, len(texts), batch_size):
+            batch = texts[i : i + batch_size]
+            all_embeddings.extend(self._embed(batch))
+        return all_embeddings
+
+    def embed_query(self, text: str) -> list[float]:
+        """Embed a single query."""
+        return self._embed([text])[0]
+
 
 def get_device() -> str:
     """Detect optimal device."""
@@ -25,16 +97,32 @@ def get_device() -> str:
         return "mps"
     return "cpu"
 
-def get_embeddings() -> HuggingFaceEmbeddings:
-    """Get or create embeddings model singleton."""
+
+def get_embeddings() -> Embeddings:
+    """Get or create embeddings model singleton (VNPT API or local HuggingFace)."""
     global _embeddings
-    if _embeddings is None:
+    if _embeddings is not None:
+        return _embeddings
+
+    if settings.use_vnpt_api:
+        if not settings.vnpt_embedding_authorization:
+            raise ValueError("VNPT_EMBEDDING_AUTHORIZATION is required when USE_VNPT_API=True")
+        _embeddings = VNPTEmbeddings(
+            endpoint=settings.vnpt_embedding_endpoint,
+            authorization=settings.vnpt_embedding_authorization,
+            token_id=settings.vnpt_embedding_token_id,
+            token_key=settings.vnpt_embedding_token_key,
+        )
+        print(f"[Embedding] VNPT API initialized: {settings.vnpt_embedding_endpoint}")
+    else:
         device = get_device()
         _embeddings = HuggingFaceEmbeddings(
             model_name=settings.embedding_model,
             model_kwargs={"device": device},
             encode_kwargs={"normalize_embeddings": True},
         )
+        print(f"[Embedding] HuggingFace loaded: {settings.embedding_model}")
+
     return _embeddings
 
 def get_qdrant_client() -> QdrantClient:
