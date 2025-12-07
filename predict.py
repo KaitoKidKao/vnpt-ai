@@ -1,49 +1,55 @@
 import asyncio
-import csv
-import json
 from pathlib import Path
 
-from src.config import BATCH_SIZE
-from src.data_processing.loaders import load_test_data_from_json 
-from src.pipeline import run_pipeline_async
+from src.config import BATCH_SIZE, DATA_INPUT_DIR, DATA_OUTPUT_DIR
+from src.pipeline import run_pipeline_async, save_predictions
+from src.data_processing.loaders import load_test_data_from_csv
 from src.utils.llm import get_large_model, get_small_model
 from src.utils.logging import log_main
 
-INPUT_FILE = Path("/code/private_test.json")
-OUTPUT_FILE = Path("submission.csv")
+
+def _find_test_file() -> Path | None:
+    """Find the first available test CSV file in DATA_INPUT_DIR."""
+    candidates = [
+        "public_test.csv",
+        "private_test.csv",
+    ]
+    for filename in candidates:
+        path = DATA_INPUT_DIR / filename
+        if path.exists():
+            return path
+    return None
+
 
 async def async_main(batch_size: int = BATCH_SIZE) -> None:
-
+    """Async main entry point for deployment."""
     get_small_model()
     get_large_model()
     log_main("Models warmed up ready.")
 
-    if not INPUT_FILE.exists():
-        local_test = Path("data/test.json") 
-        if local_test.exists():
-            log_main(f"Warning: {INPUT_FILE} not found. Using local test file: {local_test}")
-            input_path = local_test
-        else:
-            raise FileNotFoundError(f"Input file not found at {INPUT_FILE}")
-    else:
-        input_path = INPUT_FILE
+    input_file = _find_test_file()
 
-    log_main(f"Loading test data from: {input_path}")
-    questions = load_test_data_from_json(input_path)
-    log_main(f"Loaded {len(questions)} questions")
+    if input_file is None:
+        raise FileNotFoundError(
+            f"No test CSV file found in {DATA_INPUT_DIR}. "
+            "Expected files: public_test.csv or private_test.csv"
+        )
 
-    predictions = await run_pipeline_async(questions, batch_size=batch_size)
+    log_main(f"Loading test data from: {input_file}")
+    questions = load_test_data_from_csv(input_file)
+    log_main(f"Loaded {len(questions)} questions (batch_size={batch_size})")
 
-    with open(OUTPUT_FILE, "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["id", "answer"])
-        for p in predictions:
-            writer.writerow([p.qid, p.answer])
-            
-    log_main(f"Predictions saved to: {OUTPUT_FILE.absolute()}")
+    predictions = await run_pipeline_async(questions, batch_size=batch_size, force_reingest=True)
 
-def main():
-    asyncio.run(async_main(batch_size=BATCH_SIZE))
+    output_file = DATA_OUTPUT_DIR / "pred.csv"
+    save_predictions(predictions, output_file, ensure_dir=True)
+    log_main(f"Predictions saved to: {output_file}")
+
+
+def main(batch_size: int = BATCH_SIZE) -> None:
+    """Main entry point that runs the async pipeline."""
+    asyncio.run(async_main(batch_size=batch_size))
+
 
 if __name__ == "__main__":
     main()

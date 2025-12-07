@@ -198,8 +198,7 @@ async def run_pipeline_with_checkpointing(
     # Consolidate log file (sort by qid) before exiting
     log_pipeline("Consolidating log file...")
     consolidate_log_file(log_path)
-
-
+    
     elapsed = time.perf_counter() - start_time
     throughput = total / elapsed if elapsed > 0 else 0
     log_stats(f"Processed {processed_count}/{total} questions in {elapsed:.2f}s ({throughput:.2f} req/s)")

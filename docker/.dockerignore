@@ -52,5 +52,3 @@ docker-compose.yml
 # Documentation
 README.md
 *.md
-
-qdrant_storage/

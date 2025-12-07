@@ -55,10 +55,8 @@ async def async_main(batch_size: int = BATCH_SIZE) -> None:
     if processed_qids:
         log_main(f"Resuming: Found {len(processed_qids)} already processed questions")
         
-        # Filter out already processed questions
         remaining_questions = [q for q in all_questions if q.qid not in processed_qids]
         
-        # Sort remaining questions by qid to process in order
         remaining_qids = sort_qids([q.qid for q in remaining_questions])
         qid_to_q = {q.qid: q for q in remaining_questions}
         remaining_questions = [qid_to_q[qid] for qid in remaining_qids]
@@ -81,7 +79,6 @@ async def async_main(batch_size: int = BATCH_SIZE) -> None:
             batch_size=batch_size,
         )
     
-    # Final consolidation: ensure log file is sorted by qid
     log_pipeline("Final consolidation: sorting log file by qid...")
     total_in_log = consolidate_log_file(log_path)
     
@@ -89,7 +86,6 @@ async def async_main(batch_size: int = BATCH_SIZE) -> None:
     total_entries = generate_csv_from_log(log_path, output_file)
     log_pipeline(f"Generated submission.csv with {total_entries} entries (sorted by qid): {output_file}")
     
-    # Summary
     all_qids = set(q.qid for q in all_questions)
     processed_now = load_processed_qids(log_path)
     missing = all_qids - processed_now

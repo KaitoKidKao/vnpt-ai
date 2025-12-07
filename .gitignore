@@ -70,3 +70,4 @@ dmypy.json
 repomix-output.xml
 
 output/
+test_output/

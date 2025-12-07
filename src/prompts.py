@@ -93,5 +93,6 @@ if not found:
     # Tìm giá trị gần nhất
     closest_key = min(options, key=lambda k: abs(options[k] - result))
     print(f"Đáp án: {closest_key}")
-        
+```
+
 Chỉ trả về block code Python, không giải thích thêm."""

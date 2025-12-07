@@ -76,7 +76,7 @@ graph TD
 1.  **Clone the repository**
 
     ```bash
-    git clone [https://github.com/duongtruongbinh/vnpt-ai](https://github.com/duongtruongbinh/vnpt-ai)
+    git clone https://github.com/duongtruongbinh/vnpt-ai
     cd vnpt-ai
     ```
 
@@ -104,19 +104,19 @@ graph TD
     VNPT_LARGE_AUTHORIZATION=Bearer <your_token>
     VNPT_LARGE_TOKEN_ID=<your_token_id>
     VNPT_LARGE_TOKEN_KEY=<your_token_key>
-    VNPT_LARGE_ENDPOINT=[https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-large](https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-large)
+    VNPT_LARGE_ENDPOINT=https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-large
 
     # Small Model Credentials
     VNPT_SMALL_AUTHORIZATION=Bearer <your_token>
     VNPT_SMALL_TOKEN_ID=<your_token_id>
     VNPT_SMALL_TOKEN_KEY=<your_token_key>
-    VNPT_SMALL_ENDPOINT=[https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small](https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small)
+    VNPT_SMALL_ENDPOINT=https://api.idg.vnpt.vn/data-service/v1/chat/completions/vnptai-hackathon-small
 
     # Embedding Model Credentials
     VNPT_EMBEDDING_AUTHORIZATION=Bearer <your_token>
     VNPT_EMBEDDING_TOKEN_ID=<your_token_id>
     VNPT_EMBEDDING_TOKEN_KEY=<your_token_key>
-    VNPT_EMBEDDING_ENDPOINT=[https://api.idg.vnpt.vn/data-service/vnptai-hackathon-embedding](https://api.idg.vnpt.vn/data-service/vnptai-hackathon-embedding)
+    VNPT_EMBEDDING_ENDPOINT=https://api.idg.vnpt.vn/data-service/vnptai-hackathon-embedding
 
     # --- Optional: Web Crawling ---
     FIRECRAWL_API_KEY=your_firecrawl_key
@@ -132,7 +132,7 @@ Expand your knowledge base by crawling websites or adding local documents.
 
     ```bash
     # Crawl a website filtering by topic keywords (results saved to data/crawled/)
-    uv run python scripts/crawl.py --url [https://example.com](https://example.com) --mode links --topic "keyword1,keyword2"
+    uv run python scripts/crawl.py --url https://example.com --mode links --topic "keyword1,keyword2"
     ```
 
   * **Ingest Data**:

@@ -19,8 +19,7 @@ def _find_refusal_option(state: GraphState) -> str | None:
     refusal_patterns = [
         "tôi không thể", "không thể trả lời", "không thể cung cấp", "không thể chia sẻ",
         "từ chối trả lời", "từ chối cung cấp",
-        "nằm ngoài phạm vi", "không thuộc phạm vi",
-        "tôi là ai", "tôi là mô hình ngôn ngữ", 
+        "nằm ngoài phạm vi", "không thuộc phạm vi", "tôi là mô hình ngôn ngữ", 
         "hành vi vi phạm", "trái pháp luật", "không hỗ trợ",
     ]
     
@@ -63,7 +62,7 @@ def router_node(state: GraphState) -> dict:
         "$", "\\frac", "^",
         "tính giá trị", "biểu thức", "phương trình", "hàm số", "đạo hàm",
         "xác suất", "lãi suất", "vận tốc", "gia tốc", "điện trở",
-        "bao nhiêu gam", "mol", "nguyên tử khối",
+        "gam", "mol", "nguyên tử khối",
     ]
     if any(s in question for s in math_signals):
         print_log("        [Router] Fast-track: Math (Keywords/LaTeX detected)")

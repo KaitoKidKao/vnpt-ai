@@ -1,7 +1,7 @@
 """LLM utility functions for hybrid model selection (Local HuggingFace vs VNPT API)."""
 
 from typing import Any
-
+import torch
 import httpx
 from langchain_core.language_models.chat_models import BaseChatModel
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage, SystemMessage
@@ -212,6 +212,7 @@ def _load_huggingface_model(model_path: str, model_type: str) -> ChatHuggingFace
         model_kwargs={
             "trust_remote_code": True,
             "device_map": "auto",
+            "torch_dtype": torch.float32,
         },
     )
 
