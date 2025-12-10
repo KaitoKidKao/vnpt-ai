@@ -22,7 +22,12 @@ class Settings(BaseSettings):
     use_vnpt_api: bool = Field(
         default=False,
         alias="USE_VNPT_API",
-        description="If True, use VNPT API; otherwise use local HuggingFace models",
+        description="If True, use VNPT API for LLMs/embeddings when enabled",
+    )
+    use_openrouter_api: bool = Field(
+        default=False,
+        alias="USE_OPENROUTER_API",
+        description="If True, route LLM calls through OpenRouter",
     )
 
     vnpt_large_authorization: str = Field(
@@ -95,6 +100,34 @@ class Settings(BaseSettings):
     embedding_model: str = Field(
         default="bkai-foundation-models/vietnamese-bi-encoder",
         alias="EMBEDDING_MODEL",
+    )
+
+    # OpenRouter API
+    openrouter_api_key: str = Field(
+        default="",
+        alias="OPENROUTER_API_KEY",
+    )
+    openrouter_endpoint: str = Field(
+        default="https://openrouter.ai/api/v1/chat/completions",
+        alias="OPENROUTER_ENDPOINT",
+    )
+    openrouter_small_model: str = Field(
+        default="openai/gpt-4o-mini",
+        alias="OPENROUTER_SMALL_MODEL",
+    )
+    openrouter_large_model: str = Field(
+        default="openai/gpt-4o",
+        alias="OPENROUTER_LARGE_MODEL",
+    )
+    openrouter_site_url: str = Field(
+        default="",
+        alias="OPENROUTER_SITE_URL",
+        description="Optional site URL for OpenRouter HTTP-Referer header",
+    )
+    openrouter_app_name: str = Field(
+        default="",
+        alias="OPENROUTER_APP_NAME",
+        description="Optional app title for OpenRouter X-Title header",
     )
 
     # Vector database

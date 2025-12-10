@@ -211,6 +211,145 @@ class VNPTChatModel(BaseChatModel):
             raise RuntimeError(f"VNPT API processing failed: {e}") from e
 
 
+class OpenRouterChatModel(BaseChatModel):
+    """LangChain-compatible wrapper for OpenRouter API."""
+
+    endpoint: str
+    model_name: str
+    api_key: str
+    site_url: str | None = None
+    app_name: str | None = None
+    timeout: float = 60.0
+    max_tokens: int = 1024
+    temperature: float = 0.0
+
+    @property
+    def _llm_type(self) -> str:
+        return "openrouter-chat"
+
+    @property
+    def _identifying_params(self) -> dict[str, Any]:
+        return {"model_name": self.model_name, "endpoint": self.endpoint}
+
+    def _get_headers(self) -> dict[str, str]:
+        headers = {
+            "Authorization": f"Bearer {self.api_key}",
+            "Content-Type": "application/json",
+        }
+        if self.site_url:
+            headers["HTTP-Referer"] = self.site_url
+        if self.app_name:
+            headers["X-Title"] = self.app_name
+        return headers
+
+    def _convert_messages(self, messages: list[BaseMessage]) -> list[dict[str, str]]:
+        converted = []
+        for msg in messages:
+            if isinstance(msg, SystemMessage):
+                converted.append({"role": "system", "content": msg.content})
+            elif isinstance(msg, HumanMessage):
+                converted.append({"role": "user", "content": msg.content})
+            elif isinstance(msg, AIMessage):
+                converted.append({"role": "assistant", "content": msg.content})
+            else:
+                converted.append({"role": "user", "content": str(msg.content)})
+        return converted
+
+    def _create_payload(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        **kwargs: Any,
+    ) -> dict[str, Any]:
+        payload = {
+            "model": self.model_name,
+            "messages": self._convert_messages(messages),
+            "max_tokens": kwargs.get("max_tokens", self.max_tokens),
+            "temperature": kwargs.get("temperature", self.temperature),
+        }
+        if stop:
+            payload["stop"] = stop
+        return payload
+
+    def _handle_api_response(self, data: dict) -> tuple[str, str | None, dict]:
+        if "error" in data:
+            error_msg = data.get("error", {})
+            error_text = (
+                error_msg.get("message", str(error_msg)) if isinstance(error_msg, dict) else str(error_msg)
+            )
+            raise RuntimeError(f"OpenRouter API returned error: {error_text}")
+
+        if "choices" in data and data["choices"]:
+            choice = data["choices"][0]
+            message = choice.get("message", {})
+            content = message.get("content") or choice.get("text") or choice.get("content")
+            if content is None:
+                raise RuntimeError(f"Unexpected OpenRouter response format: {choice}")
+            finish_reason = choice.get("finish_reason")
+        else:
+            raise RuntimeError(f"Unexpected OpenRouter API response keys: {list(data.keys())}")
+
+        return content, finish_reason, data.get("usage", {})
+
+    def _build_chat_result(self, content: str, finish_reason: str | None, usage: dict) -> ChatResult:
+        generation = ChatGeneration(
+            message=AIMessage(content=content),
+            generation_info={"finish_reason": finish_reason, "usage": usage},
+        )
+        return ChatResult(
+            generations=[generation],
+            llm_output={"model_name": self.model_name, "usage": usage},
+        )
+
+    def _generate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        payload = self._create_payload(messages, stop, **kwargs)
+
+        try:
+            with httpx.Client(timeout=self.timeout) as client:
+                response = client.post(
+                    self.endpoint,
+                    headers=self._get_headers(),
+                    json=payload,
+                )
+                data = response.json()
+
+            content, finish_reason, usage = self._handle_api_response(data)
+            return self._build_chat_result(content, finish_reason, usage)
+
+        except httpx.RequestError as e:
+            raise RuntimeError(f"OpenRouter API request failed: {e}") from e
+
+    async def _agenerate(
+        self,
+        messages: list[BaseMessage],
+        stop: list[str] | None = None,
+        run_manager: Any = None,
+        **kwargs: Any,
+    ) -> ChatResult:
+        payload = self._create_payload(messages, stop, **kwargs)
+
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                response = await client.post(
+                    self.endpoint,
+                    headers=self._get_headers(),
+                    json=payload,
+                )
+                data = response.json()
+
+            content, finish_reason, usage = self._handle_api_response(data)
+            return self._build_chat_result(content, finish_reason, usage)
+
+        except httpx.RequestError as e:
+            raise RuntimeError(f"OpenRouter API request failed: {e}") from e
+
+
 def _load_huggingface_model(model_path: str, model_type: str) -> ChatHuggingFace:
     """Load a local HuggingFace model with caching."""
     if model_path in _model_cache:
@@ -235,6 +374,35 @@ def _load_huggingface_model(model_path: str, model_type: str) -> ChatHuggingFace
     _model_cache[model_path] = llm
     log_pipeline(f"[Model] {model_type} loaded from {model_path}")
     return llm
+
+
+def _get_openrouter_model(model_type: str) -> OpenRouterChatModel:
+    cache_key = f"openrouter_{model_type}"
+    if cache_key in _model_cache:
+        return _model_cache[cache_key]
+
+    api_key = settings.openrouter_api_key
+    if not api_key:
+        raise ValueError("OPENROUTER_API_KEY is required when USE_OPENROUTER_API=True")
+
+    if model_type == "small":
+        model_name = settings.openrouter_small_model
+    elif model_type == "large":
+        model_name = settings.openrouter_large_model
+    else:
+        raise ValueError(f"Unknown model type: {model_type}")
+
+    model = OpenRouterChatModel(
+        endpoint=settings.openrouter_endpoint,
+        model_name=model_name,
+        api_key=api_key,
+        site_url=settings.openrouter_site_url or None,
+        app_name=settings.openrouter_app_name or None,
+    )
+
+    _model_cache[cache_key] = model
+    log_pipeline(f"[Model] OpenRouter {model_type} initialized: {model_name}")
+    return model
 
 
 def _get_vnpt_model(model_type: str) -> VNPTChatModel:
@@ -276,6 +444,8 @@ def _get_vnpt_model(model_type: str) -> VNPTChatModel:
 
 def get_small_model() -> BaseChatModel:
     """Get or create small LLM (VNPT API or local HuggingFace)."""
+    if settings.use_openrouter_api:
+        return _get_openrouter_model("small")
     if settings.use_vnpt_api:
         return _get_vnpt_model("small")
     return _load_huggingface_model(settings.llm_model_small, "Small")
@@ -283,6 +453,8 @@ def get_small_model() -> BaseChatModel:
 
 def get_large_model() -> BaseChatModel:
     """Get or create large LLM (VNPT API or local HuggingFace)."""
+    if settings.use_openrouter_api:
+        return _get_openrouter_model("large")
     if settings.use_vnpt_api:
         return _get_vnpt_model("large")
     return _load_huggingface_model(settings.llm_model_large, "Large")

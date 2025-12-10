@@ -5,6 +5,7 @@ from pathlib import Path
 import re
 
 from langchain_qdrant import QdrantVectorStore
+from langchain_qdrant.qdrant import QdrantVectorStoreError
 from langchain_text_splitters import RecursiveCharacterTextSplitter
 from qdrant_client import QdrantClient
 from qdrant_client.models import Distance, VectorParams
@@ -47,11 +48,22 @@ def get_vector_store() -> QdrantVectorStore:
     if _vector_store is None:
         client = get_qdrant_client()
         embeddings = get_embeddings()
-        _vector_store = QdrantVectorStore(
-            client=client,
-            collection_name=settings.qdrant_collection,
-            embedding=embeddings,
-        )
+        try:
+            _vector_store = QdrantVectorStore(
+                client=client,
+                collection_name=settings.qdrant_collection,
+                embedding=embeddings,
+            )
+        except QdrantVectorStoreError as e:
+            # Recreate collection on mismatch
+            log_pipeline(f"Vector store init failed ({e}). Recreating collection '{settings.qdrant_collection}'.")
+            sample_embedding = embeddings.embed_query("test")
+            _initialize_collection(client, settings.qdrant_collection, len(sample_embedding), force_recreate=True)
+            _vector_store = QdrantVectorStore(
+                client=client,
+                collection_name=settings.qdrant_collection,
+                embedding=embeddings,
+            )
     return _vector_store
 
 def _is_junk_text(text: str) -> bool:
@@ -75,9 +87,28 @@ def _initialize_collection(
     """Initialize Qdrant collection, creating if needed."""
     collection_exists = client.collection_exists(collection_name)
 
-    if collection_exists and force_recreate:
-        client.delete_collection(collection_name)
-        collection_exists = False
+    def _existing_vector_size() -> int | None:
+        try:
+            info = client.get_collection(collection_name)
+        except Exception:
+            return None
+        vectors_config = getattr(info, "vectors_config", None)
+        if isinstance(vectors_config, dict):
+            first = next(iter(vectors_config.values()), None)
+            return getattr(first, "size", None) if first else None
+        return getattr(vectors_config, "size", None)
+
+    if collection_exists:
+        existing_size = _existing_vector_size()
+        if existing_size is not None and existing_size != vector_size:
+            log_pipeline(
+                f"Collection '{collection_name}' vector size {existing_size} mismatches expected {vector_size}. Recreating."
+            )
+            client.delete_collection(collection_name)
+            collection_exists = False
+        elif force_recreate:
+            client.delete_collection(collection_name)
+            collection_exists = False
 
     if not collection_exists:
         client.create_collection(
@@ -263,12 +294,24 @@ def ingest_all_data(
 
     if collection_exists and not force:
         log_pipeline(f"Loading existing vector store: {settings.vector_db_path_resolved}")
-        _vector_store = QdrantVectorStore(
-            client=client,
-            collection_name=collection_name,
-            embedding=embeddings,
-        )
-        return _vector_store
+        try:
+            _vector_store = QdrantVectorStore(
+                client=client,
+                collection_name=collection_name,
+                embedding=embeddings,
+            )
+            return _vector_store
+        except QdrantVectorStoreError as e:
+            # Handle dimension mismatch or other config issues by recreating the collection
+            log_pipeline(f"Existing collection incompatible ({e}). Recreating collection '{collection_name}'.")
+            sample_embedding = embeddings.embed_query("test")
+            _initialize_collection(client, collection_name, len(sample_embedding), force_recreate=True)
+            _vector_store = QdrantVectorStore(
+                client=client,
+                collection_name=collection_name,
+                embedding=embeddings,
+            )
+            return _vector_store
 
     if force and collection_exists:
         log_pipeline(f"Force re-ingesting: deleting collection '{collection_name}'")
@@ -321,11 +364,21 @@ def ingest_files(
     sample_embedding = embeddings.embed_query("test")
     _initialize_collection(client, collection_name, len(sample_embedding), force_recreate=not append)
 
-    vector_store = QdrantVectorStore(
-        client=client,
-        collection_name=collection_name,
-        embedding=embeddings,
-    )
+    try:
+        vector_store = QdrantVectorStore(
+            client=client,
+            collection_name=collection_name,
+            embedding=embeddings,
+        )
+    except QdrantVectorStoreError as e:
+        # If existing collection is incompatible (e.g., dimension mismatch), recreate it
+        log_pipeline(f"Existing collection incompatible ({e}). Recreating collection '{collection_name}'.")
+        _initialize_collection(client, collection_name, len(sample_embedding), force_recreate=True)
+        vector_store = QdrantVectorStore(
+            client=client,
+            collection_name=collection_name,
+            embedding=embeddings,
+        )
 
     total_chunks, _, _ = _process_and_index_documents(
         file_paths,
